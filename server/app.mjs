@@ -10,11 +10,15 @@ export function createApp(models,connection){
   app.post('/api/session',async(req,res)=>{
     const displayName=typeof req.body.displayName==='string'?req.body.displayName.trim():'';
     if(!displayName||displayName.length>60)return res.status(400).json({error:'Enter your name (up to 60 characters).'});
-    const token=newToken(),user=await models.User.create({displayName,tokenHash:tokenHash(token)});
+    const token=newToken(),user=await models.User.create({displayName,tokenHash:tokenHash(token),tokenCreatedAt:new Date()});
     res.status(201).json({token,user:{_id:user._id,displayName:user.displayName}});
   });
   app.use('/api',authenticate(models.User));
   app.get('/api/session',(req,res)=>res.json({user:req.user}));
+  app.delete('/api/session',async(req,res,next)=>{
+    try { await models.User.updateOne({_id:req.user._id},{$set:{tokenRevokedAt:new Date()}}); res.status(204).end(); }
+    catch(error){ next(error); }
+  });
   app.use('/api/trips',tripRoutes(models));
   app.use('/api/expenses',expenseRoutes(models,connection));
   app.use('/api',(req,res)=>res.status(404).json({error:'API route not found.'}));

@@ -22,6 +22,8 @@ const eventFields = () => ({
 export const userSchema = new Schema({
   displayName: { type: String, trim: true, required: true, maxlength: 60 },
   tokenHash: { type: String, select: false },
+  tokenCreatedAt: { type: Date },
+  tokenRevokedAt: { type: Date },
 }, options);
 userSchema.index({ tokenHash: 1 }, { unique: true, sparse: true });
 
