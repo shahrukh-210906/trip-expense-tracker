@@ -2,7 +2,7 @@
 
 A React + Express + MongoDB app for personal payments, direct debts between travelers, and a separate group purse. The original design prototype remains in `prototype/`.
 
-## Task status — September 15, 2026
+## Task status — September 16, 2026
 
 | Stage | Status |
 | --- | --- |
@@ -13,7 +13,7 @@ A React + Express + MongoDB app for personal payments, direct debts between trav
 | Expense API and retry protection | Working for personal payments, contributions, and lead-only spending |
 | Settlement calculations | Direct pairwise offsets with integer paise and deterministic remainder allocation |
 | React integration | Working trip selection, expenses, balances, group purse, and unified Add expense |
-| Real-time updates | Pending; the unsafe unauthenticated socket broadcast was removed; use Refresh trip |
+| Real-time updates | Working authenticated subscriptions, permission-filtered notifications, reconnect refresh, and connection status |
 | Offline queue and installable PWA | Pending; saves currently require connectivity |
 | Public deployment and account recovery | Pending |
 
@@ -70,7 +70,7 @@ npm run test:integration
 npm run build
 ```
 
-- 16 local tests cover schemas, authorization rules, private visibility, integer splits, and direct offsets.
+- 19 local tests cover schemas, authorization rules, private visibility, integer splits, direct offsets, and refresh races.
 - Live integration tests cover distinct identities, create/join, membership, private expenses, impersonation rejection, concurrent retries, changed-payload rejection, contributions, and concurrent overspending.
 - Integration tests create a fresh `ttest_<uuid>` database and remove only that generated database in cleanup. The configured application database is not cleared.
 - Browser-verified trip creation, a private ₹50 payment, a ₹500 contribution, a ₹125 group expense, and the ₹375 purse balance persisting after reload. These records are clearly labeled in **Demo trip — browser check** under **Demo traveler**.
@@ -78,7 +78,17 @@ npm run build
 
 ## Next stage
 
-Add authenticated socket subscriptions with per-recipient visibility, then IndexedDB offline storage and durable sync. Account recovery, session expiry/revocation, invitation abuse controls, deployment configuration, and PWA installation follow before public release.
+Next is IndexedDB offline storage and durable sync. Account recovery, session expiry/revocation, invitation abuse controls, deployment configuration, and PWA installation follow before public release.
+
+## Live updates — completed September 16
+
+- Each Socket.IO connection authenticates the traveler token and checks membership for one trip. Switching trips disconnects the previous subscription. Clients cannot choose arbitrary rooms.
+- Successful writes notify only people authorized to see the entry: the owner for private expenses, trip members for shared expenses, leads plus the contributor for contributions, and leads for purse spending. Failed writes and ordinary duplicate retries do not broadcast.
+- Notifications contain only a trip ID. The client retrieves a fresh snapshot through the protected API; no expense details or purse amounts are broadcast.
+- Member joins update existing viewers. Reconnecting reloads changes missed during disconnection, and the header shows connection status. Manual Refresh remains available.
+- Refreshes are serialized, coalesced, and discarded if another change arrives during the request or the user leaves the trip. Updating data does not reset open expense forms.
+- Live MongoDB integration tests cover unauthorized subscriptions, cross-trip isolation, private and purse notification visibility, duplicates, failed writes, member joins, and reconnect authorization. A browser check saved **Live sync check (demo)** for ₹0.01 in one tab and observed it in another without refreshing.
+- This milestone supports a single API process. Multiple server instances require a shared Socket.IO adapter; crash-proof event delivery and a durable offline queue remain future work. It does not make the localhost app publicly accessible.
 
 ## UI usability refinement
 

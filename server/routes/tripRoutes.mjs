@@ -33,6 +33,7 @@ export function tripRoutes(models) {
     const trip=await Trip.findOneAndUpdate({joinCode,$or:[{participants:req.user._id},{'participants.99':{$exists:false}}]},
       {$addToSet:{participants:req.user._id}},{returnDocument:'after'});
     if(!trip)return res.status(404).json({error:'Trip code not found or trip is full.'});
+    req.app.get('live')?.membersChanged(trip);
     res.json({trip:publicTrip(trip,req.user._id)});
   });
   router.use('/:tripId',async(req,res,next)=>{

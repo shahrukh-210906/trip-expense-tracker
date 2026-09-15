@@ -23,11 +23,12 @@ export function expenseRoutes(models,connection){
         if(!trip)throw new Error('Trip not found.');
         assertCanRecord(trip,req.user._id,entry,input.ledger);
         const identity={tripId:entry.tripId,recordedBy:entry.recordedBy,clientId:entry.clientId};
-        let saved=await Model.findOne(identity);
+        let saved=await Model.findOne(identity),inserted=false;
         if(!saved){
           try{
             if(input.ledger==='purse'){
               await connection.transaction(async session=>{
+                inserted=false;
                 const prior=await Model.findOne(identity).session(session);
                 if(prior){saved=prior;return;}
                 const delta=entry.kind==='expense'?-entry.amountPaise:entry.amountPaise;
@@ -35,10 +36,12 @@ export function expenseRoutes(models,connection){
                   {$gte:-delta}:{$lte:Number.MAX_SAFE_INTEGER-delta}},{$inc:{purseBalancePaise:delta}},{session});
                 if(!updated.modifiedCount)throw new Error('Insufficient purse balance or balance limit reached.');
                 [saved]=await Model.create([entry.toObject()],{session});
+                inserted=true;
               });
-            }else saved=await entry.save();
+            }else {saved=await entry.save();inserted=true;}
           }catch(error){
             if(error.code!==11000)throw error;
+            inserted=false;
             saved=await Model.findOne(identity);
             if(!saved)throw new Error('An opening balance has already been recorded.');
           }
@@ -47,6 +50,7 @@ export function expenseRoutes(models,connection){
           splitAmong:e.splitAmong?.map(String),clientCreatedAt:new Date(e.clientCreatedAt).toISOString()});
         if(comparable(saved)!==comparable(entry))throw new Error('This client ID was already used for a different entry.');
         savedExpenses.push(saved);
+        if(inserted)req.app.get('live')?.entryChanged(trip,saved,input.ledger);
       }catch(error){
         const safe=error.name==='ValidationError'?'Check the amount, description, beneficiaries, and entry ID.':
           error.name==='MongoServerError'?'Database write failed. Purse writes require a replica set such as Atlas.':

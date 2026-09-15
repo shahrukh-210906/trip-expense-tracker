@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLiveTrip } from './useLiveTrip.js';
 import Onboarding from './components/Onboarding.jsx';
 import Expenses from './components/Expenses.jsx';
 import Balances from './components/Balances.jsx';
@@ -16,9 +17,12 @@ const pages = {
 export default function App() {
   const [session, setSession] = useState(getSession);
   const [tripId, setTripId] = useState(() => localStorage.getItem('active-trip'));
-  const [data, setData] = useState(null), [trips, setTrips] = useState([]);
+  const [trips, setTrips] = useState([]);
+  const { data, error, setError, status, reload } = useLiveTrip(session, tripId);
+  const selectedTrip = useRef(tripId);
+  selectedTrip.current = tripId;
   const [page, setPage] = useState('expenses');
-  const [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState('');
   const [entryKind, setEntryKind] = useState(null), [refreshing, setRefreshing] = useState(false);
   const userId = session?.user._id, lead = data?.trip.groupLeads.includes(userId);
   const name = id => data?.members.find(member => member._id === id)?.displayName || 'Traveler';
@@ -31,14 +35,6 @@ export default function App() {
   }, [session, tripId]);
 
   useEffect(() => {
-    if (!session || !tripId) return;
-    let cancelled = false;
-    setData(null); setError('');
-    api('/trips/' + tripId).then(result => { if (!cancelled) setData(result); }).catch(error => { if (!cancelled) setError(error.message); });
-    return () => { cancelled = true; };
-  }, [session, tripId]);
-
-  useEffect(() => {
     if (!notice) return;
     const timeout = setTimeout(() => setNotice(''), 5000);
     return () => clearTimeout(timeout);
@@ -46,17 +42,20 @@ export default function App() {
 
   function selectTrip(id) {
     localStorage.setItem('active-trip', id);
-    setTripId(id); setPage('expenses'); setError(''); setNotice('');
+    setTripId(id); setPage('expenses'); setError(''); setNotice(''); setRefreshing(false);
   }
   function backToTrips() {
     localStorage.removeItem('active-trip');
-    setTripId(null); setData(null); setError(''); setNotice('');
+    setTripId(null); setError(''); setNotice(''); setRefreshing(false);
   }
   async function refresh(savedMessage) {
+    const requestedTrip = tripId;
     setRefreshing(true);
-    try { const result = await api('/trips/' + tripId); setData(result); setError(''); setNotice(savedMessage || 'Trip is up to date.'); }
-    catch (error) { setError(savedMessage ? 'Your payment was saved. Refresh to load the updated trip.' : error.message); }
-    finally { setRefreshing(false); }
+    const success = await reload();
+    if (selectedTrip.current !== requestedTrip) return;
+    if (success) setNotice(savedMessage || 'Trip is up to date.');
+    else if (savedMessage) setError('Your payment was saved. Refresh to load the updated trip.');
+    setRefreshing(false);
   }
   function saved(message) { setEntryKind(null); setNotice(message); void refresh(message); }
 
@@ -65,11 +64,12 @@ export default function App() {
       {tripId && data && <><button className="trip-switcher" onClick={backToTrips}><span className="trip-mark"><Icon name="trip"/></span><span><small>CURRENT TRIP</small><strong>{data.trip.name}</strong></span><Icon name="down" size={16}/></button>
         <nav aria-label="Trip navigation">{[['expenses', 'Expenses', 'Your payments & activity'], ['balances', 'Balances', 'Who owes whom'], ...(lead ? [['purse', 'Group purse', 'Shared trip funds']] : [])].map(([id, label, description]) =>
           <button key={id} aria-current={page === id ? 'page' : undefined} onClick={() => { setPage(id); setNotice(''); }}><Icon name={id}/><span><strong>{label}</strong><small>{description}</small></span></button>)}</nav>
-        <div className="sidebar-note"><span className="status-dot"/>Connected to your trip<small>Refresh to see the latest changes.</small></div></>}
+        <div className="sidebar-note"><small>Expenses and balances update automatically.</small></div></>}
       <div className="profile"><span className="avatar">{(session?.user.displayName || 'T').slice(0, 1)}</span><span><strong>{session?.user.displayName || 'Welcome, traveler'}</strong><small>{data && tripId ? lead ? 'Group lead' : 'Traveler' : 'Your travel companion'}</small></span></div>
     </aside>
     <main>
       {tripId && data && <header className="trip-header"><span className="trip-breadcrumb"><Icon name="trip" size={16}/>{data.trip.name}</span><div className="header-tools"><details className="invite"><summary><Icon name="users" size={17}/>{data.members.length} {data.members.length === 1 ? 'traveler' : 'travelers'}<Icon name="down" size={14}/></summary><div className="invite-content"><strong>Invite a friend</strong><p>Ask them to choose Join trip and enter this code.</p><code>{data.trip.joinCode}</code><div className="member-list">{data.members.map(member => <div key={member._id}>{member.displayName}<small>{data.trip.groupLeads.includes(member._id) ? 'Group lead' : 'Traveler'}</small></div>)}</div></div></details>
+        <span className={'live-status ' + status} role="status"><span className="status-dot"/>{error ? 'Refresh needed' : status === 'live' ? 'Live' : status === 'connecting' ? 'Connecting' : status === 'offline' ? 'Offline' : status === 'unavailable' ? 'Live unavailable' : 'Reconnecting'}</span>
         <button className="icon-button" aria-label="Refresh trip" title="Refresh trip" disabled={refreshing} onClick={() => refresh()}><Icon name="refresh"/></button></div></header>}
       {error && <div className="error" role="alert">{error}{tripId && <button className="text-button" disabled={refreshing} onClick={() => refresh()}>Try again</button>}</div>}
       {!tripId ? <Onboarding session={session} onSession={setSession} onJoinSuccess={selectTrip} trips={trips}/> : !data ? <div className="loading-state"><Icon name="trip" size={32}/><h1>{error ? 'Let’s get you back to your trip' : 'Loading your trip…'}</h1><button className="secondary" onClick={backToTrips}>Back to my trips</button></div> : <>
