@@ -55,7 +55,8 @@ export function expenseRoutes(models,connection){
         const safe=error.name==='ValidationError'?'Check the amount, description, beneficiaries, and entry ID.':
           error.name==='MongoServerError'?'Database write failed. Purse writes require a replica set such as Atlas.':
           error.message;
-        errors.push({clientId:input?.clientId,error:safe});
+        const retryable=['MongoNetworkError','MongoNetworkTimeoutError','MongoServerSelectionError','MongoServerError'].includes(error.name);
+        errors.push({clientId:input?.clientId,error:safe,retryable});
       }
     }
     res.json({syncedCount:savedExpenses.length,savedExpenses,errors});

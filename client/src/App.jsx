@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveTrip } from './useLiveTrip.js';
+import { useOfflineQueue } from './useOfflineQueue.js';
+import { cacheTrips, getCached } from './offlineStore.mjs';
+import SyncQueue from './components/SyncQueue.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import Expenses from './components/Expenses.jsx';
 import Balances from './components/Balances.jsx';
@@ -18,7 +21,9 @@ export default function App() {
   const [session, setSession] = useState(getSession);
   const [tripId, setTripId] = useState(() => localStorage.getItem('active-trip'));
   const [trips, setTrips] = useState([]);
-  const { data, error, setError, status, reload } = useLiveTrip(session, tripId);
+  const { data, error, setError, status, reload, cached } = useLiveTrip(session, tripId);
+  const offline = useOfflineQueue(session);
+  const queued = offline.rows.filter(row => row.entry.tripId === tripId);
   const selectedTrip = useRef(tripId);
   selectedTrip.current = tripId;
   const [page, setPage] = useState('expenses');
@@ -30,7 +35,13 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
-    api('/trips').then(result => { if (!cancelled) setTrips(result.trips); }).catch(error => { if (!cancelled) setError(error.message); });
+    let fresh = false, hasCached = false, connectionFailed = false;
+    void getCached(session.user._id, 'trips').then(trips => { if (!cancelled && !fresh && trips) { hasCached = true; setTrips(trips); if (connectionFailed) setError(''); } }).catch(() => {});
+    api('/trips', undefined, { token: session.token }).then(result => {
+      fresh = true;
+      if (!cancelled) setTrips(result.trips);
+      void cacheTrips(session.user._id, result.trips).catch(() => {});
+    }).catch(error => { connectionFailed = error.retryable; if (!cancelled && (!hasCached || !error.retryable)) setError(error.message); });
     return () => { cancelled = true; };
   }, [session, tripId]);
 
@@ -57,7 +68,7 @@ export default function App() {
     else if (savedMessage) setError('Your payment was saved. Refresh to load the updated trip.');
     setRefreshing(false);
   }
-  function saved(message) { setEntryKind(null); setNotice(message); void refresh(message); }
+  function saved(message) { setEntryKind(null); setNotice(message); }
 
   return <div className={'app ' + (!tripId ? 'trip-picker' : '')}>
     <aside className="sidebar"><button className="brand" onClick={backToTrips} aria-label="Trip tracker home">trip<span>.</span></button>
@@ -69,18 +80,20 @@ export default function App() {
     </aside>
     <main>
       {tripId && data && <header className="trip-header"><span className="trip-breadcrumb"><Icon name="trip" size={16}/>{data.trip.name}</span><div className="header-tools"><details className="invite"><summary><Icon name="users" size={17}/>{data.members.length} {data.members.length === 1 ? 'traveler' : 'travelers'}<Icon name="down" size={14}/></summary><div className="invite-content"><strong>Invite a friend</strong><p>Ask them to choose Join trip and enter this code.</p><code>{data.trip.joinCode}</code><div className="member-list">{data.members.map(member => <div key={member._id}>{member.displayName}<small>{data.trip.groupLeads.includes(member._id) ? 'Group lead' : 'Traveler'}</small></div>)}</div></div></details>
-        <span className={'live-status ' + status} role="status"><span className="status-dot"/>{error ? 'Refresh needed' : status === 'live' ? 'Live' : status === 'connecting' ? 'Connecting' : status === 'offline' ? 'Offline' : status === 'unavailable' ? 'Live unavailable' : 'Reconnecting'}</span>
+        <span className={'live-status ' + (cached ? 'offline' : status)} role="status"><span className="status-dot"/>{error ? 'Refresh needed' : cached ? 'Saved copy' : status === 'live' ? 'Live' : status === 'connecting' ? 'Connecting' : status === 'offline' ? 'Offline' : status === 'unavailable' ? 'Live unavailable' : 'Reconnecting'}</span>
         <button className="icon-button" aria-label="Refresh trip" title="Refresh trip" disabled={refreshing} onClick={() => refresh()}><Icon name="refresh"/></button></div></header>}
       {error && <div className="error" role="alert">{error}{tripId && <button className="text-button" disabled={refreshing} onClick={() => refresh()}>Try again</button>}</div>}
+      {offline.storageError && <div className="error" role="alert">{offline.storageError}</div>}
       {!tripId ? <Onboarding session={session} onSession={setSession} onJoinSuccess={selectTrip} trips={trips}/> : !data ? <div className="loading-state"><Icon name="trip" size={32}/><h1>{error ? 'Let’s get you back to your trip' : 'Loading your trip…'}</h1><button className="secondary" onClick={backToTrips}>Back to my trips</button></div> : <>
         <div className="page-heading"><div><span className="eyebrow">{page === 'purse' ? 'FOR GROUP LEADS' : 'YOUR TRIP, AT A GLANCE'}</span><h1>{pages[page].title}</h1><p>{pages[page].description}</p></div>
           <button className="primary" disabled={refreshing} onClick={() => setEntryKind(page === 'purse' ? 'expense' : 'personal')}><Icon name="plus" size={18}/>{page === 'purse' ? 'Record purse spending' : 'Add expense'}</button></div>
+        {(queued.length > 0 || cached || status === 'offline') && <SyncQueue rows={queued} cached={cached} busy={offline.busy} retry={offline.retry} sync={() => { offline.sync(); void refresh(); }}/>}
         {page === 'expenses' && <Expenses data={data} userId={userId} name={name}/>}
         {page === 'balances' && <Balances data={data} userId={userId} name={name}/>}
         {page === 'purse' && lead && <Purse data={data} name={name}/>}
       </>}
     </main>
     {notice && <div className="toast" role="status"><Icon name="check" size={18}/>{notice}<button className="icon-button" aria-label="Dismiss notification" onClick={() => setNotice('')}><Icon name="close" size={16}/></button></div>}
-    {entryKind && data && <ExpenseDialog initialKind={entryKind} data={data} user={session.user} onClose={() => setEntryKind(null)} onSaved={saved}/>}
+    {entryKind && data && <ExpenseDialog initialKind={entryKind} data={data} user={session.user} enqueue={offline.enqueue} onClose={() => setEntryKind(null)} onSaved={saved}/>}
   </div>;
 }

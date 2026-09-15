@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
+    "fake-indexeddb": "^6.2.5",
     "vite": "^8.3.0"
   },
   "dependencies": {

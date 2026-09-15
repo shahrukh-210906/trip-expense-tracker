@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api.js';
 import { Icon, money } from './ui.jsx';
 
-export default function ExpenseDialog({ initialKind, data, user, onClose, onSaved }) {
+export default function ExpenseDialog({ initialKind, data, user, onClose, onSaved, enqueue }) {
   const [kind, setKind] = useState(initialKind);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -34,10 +33,9 @@ export default function ExpenseDialog({ initialKind, data, user, onClose, onSave
       entry: { ...body, clientId: crypto.randomUUID(), clientCreatedAt: new Date().toISOString() } };
     setSaving(true);
     try {
-      const result = await api('/expenses/sync', { offlineExpenses: [pending.current.entry] });
-      if (result.errors.length) throw new Error(result.errors[0].error);
-      onSaved(kind === 'contribution' ? 'Contribution saved.' : kind === 'expense' ? 'Purse spending saved.' : 'Expense saved.');
-    } catch (error) { setError(error.message); setSaving(false); }
+      await enqueue(pending.current.entry);
+      onSaved('Saved on this device. It will sync automatically.');
+    } catch { setError('Could not save this payment on your device. Keep the form open and check browser storage before trying again.'); setSaving(false); }
   }
   return <dialog ref={dialog} className="expense-dialog" aria-labelledby="entry-title" onCancel={event => { event.preventDefault(); if (!saving) onClose(); }}>
     <form onSubmit={save}><div className="dialog-heading"><div><span className="eyebrow">RECORD A PAYMENT</span><h2 id="entry-title">{kind === 'expense' ? 'Record purse spending' : 'Add expense'}</h2></div>
@@ -54,7 +52,8 @@ export default function ExpenseDialog({ initialKind, data, user, onClose, onSave
           <strong>{kind === 'personal' ? selfOnly ? 'Just for you' : 'Split equally' : kind === 'contribution' ? 'Added to shared funds' : 'Deducted from shared funds'}</strong>
           <p>{kind === 'personal' ? selfOnly ? 'Only you can see this expense. It creates no debt.' : 'Your own share creates no debt. Friends’ shares are added to their balance with you.' : kind === 'contribution' ? 'Your contribution increases the group purse. Personal balances stay the same.' : 'This comes out of the group purse. Nobody owes you personally for it.'}</p>
           {validAmount && kind === 'personal' && people.map((id, index) => <div className="split-line" key={id}><span>{data.members.find(m => m._id === id)?.displayName}{id === user._id ? ' (you)' : ''}</span><strong>{money(Math.floor(amountPaise / people.length) + (index < amountPaise % people.length ? 1 : 0))}</strong></div>)}
-          {validAmount && kind === 'expense' && <div className="split-line"><span>Purse after this payment</span><strong>{money(data.trip.purseBalancePaise - amountPaise)}</strong></div>}
+          {validAmount && kind === 'expense' && <div className="split-line"><span>Estimated purse after sync</span><strong>{money(data.trip.purseBalancePaise - amountPaise)}</strong></div>}
+          {kind === 'expense' && <small>The server checks available funds when this payment syncs.</small>}
         </div>
       </fieldset>
       {error && <p className="error" role="alert">{error}</p>}</div>

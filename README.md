@@ -14,7 +14,8 @@ A React + Express + MongoDB app for personal payments, direct debts between trav
 | Settlement calculations | Direct pairwise offsets with integer paise and deterministic remainder allocation |
 | React integration | Working trip selection, expenses, balances, group purse, and unified Add expense |
 | Real-time updates | Working authenticated subscriptions, permission-filtered notifications, reconnect refresh, and connection status |
-| Offline queue and installable PWA | Pending; saves currently require connectivity |
+| Offline queue and cached app loading | Working durable browser queue, automatic retries, and offline reload of previously opened trips |
+| Installable PWA | Manifest, icons, and installation flow pending |
 | Public deployment and account recovery | Pending |
 
 ### Bugs repaired
@@ -58,7 +59,7 @@ For React hot reload, keep the API running and run `npm run dev:client` in anoth
 - **Contribution to group purse** remains inside **Add expense**. Members see only their own contributions; leads see all purse entries and its balance.
 - Only leads spend from the purse. The purse starts at zero and is funded by contributions. Purse entries never change personal debts.
 - Purse balance updates and ledger insertion commit together in a transaction. Concurrent spending cannot overdraw the purse.
-- A unique `(tripId, recordedBy, clientId)` index per ledger prevents duplicate writes on retries. Reusing an ID for different content returns an error. The frontend retains its ID when retrying an unchanged open form; it has no durable offline queue yet.
+- A unique `(tripId, recordedBy, clientId)` index per ledger prevents duplicate writes on retries. Reusing an ID for different content returns an error. The frontend persists each payment and its original ID in IndexedDB before reporting a save; retries use that same ID after reload or a lost response.
 - These are records of payments already made. The app does not transfer money or record money received.
 
 ## Verification
@@ -70,7 +71,7 @@ npm run test:integration
 npm run build
 ```
 
-- 19 local tests cover schemas, authorization rules, private visibility, integer splits, direct offsets, and refresh races.
+- 27 local tests cover schemas, authorization rules, private visibility, integer splits, direct offsets, refresh races, and offline storage/sync recovery.
 - Live integration tests cover distinct identities, create/join, membership, private expenses, impersonation rejection, concurrent retries, changed-payload rejection, contributions, and concurrent overspending.
 - Integration tests create a fresh `ttest_<uuid>` database and remove only that generated database in cleanup. The configured application database is not cleared.
 - Browser-verified trip creation, a private ₹50 payment, a ₹500 contribution, a ₹125 group expense, and the ₹375 purse balance persisting after reload. These records are clearly labeled in **Demo trip — browser check** under **Demo traveler**.
@@ -78,7 +79,7 @@ npm run build
 
 ## Next stage
 
-Next is IndexedDB offline storage and durable sync. Account recovery, session expiry/revocation, invitation abuse controls, deployment configuration, and PWA installation follow before public release.
+Next are account recovery and session expiry/revocation, followed by invitation abuse controls, PWA installation, and deployment configuration before public release.
 
 ## Live updates — completed September 16
 
@@ -88,7 +89,19 @@ Next is IndexedDB offline storage and durable sync. Account recovery, session ex
 - Member joins update existing viewers. Reconnecting reloads changes missed during disconnection, and the header shows connection status. Manual Refresh remains available.
 - Refreshes are serialized, coalesced, and discarded if another change arrives during the request or the user leaves the trip. Updating data does not reset open expense forms.
 - Live MongoDB integration tests cover unauthorized subscriptions, cross-trip isolation, private and purse notification visibility, duplicates, failed writes, member joins, and reconnect authorization. A browser check saved **Live sync check (demo)** for ₹0.01 in one tab and observed it in another without refreshing.
-- This milestone supports a single API process. Multiple server instances require a shared Socket.IO adapter; crash-proof event delivery and a durable offline queue remain future work. It does not make the localhost app publicly accessible.
+- Live updates support a single API process. Multiple server instances require a shared Socket.IO adapter; crash-proof server event delivery remains future work. It does not make the localhost app publicly accessible.
+
+## Offline saving and automatic sync — completed September 16
+
+- Payments are written to an IndexedDB outbox before the form closes. If local storage fails, the form stays open and does not claim a successful save.
+- Pending entries remain separate from confirmed expense history and balances. This also applies to contributions and purse spending: the server validates funds and permissions at sync time.
+- The queue distinguishes waiting, accepted-but-refreshing, and rejected entries. Rejected entries retain their original data and a Retry action; transient connection/database failures retry automatically.
+- Sync runs when the app opens, receives a connection event, returns online, or checks again every 30 seconds while open. Batches contain at most 100 entries. Browser locks coordinate tabs where supported; server idempotency protects retries on all browsers.
+- Confirmed receipts remain in the outbox until a fresh trip snapshot includes the corresponding entry. Snapshot caching and receipt removal happen in one local transaction, so a reload cannot lose the confirmed record from view.
+- Cached trip lists and authorized trip snapshots are scoped to the traveler. An explicit access-denied response clears the affected cached trip. Offline views reflect the permissions and data from the last successful connection.
+- `npm run build` generates a versioned service worker that caches only the application HTML, JavaScript, and CSS. API responses and socket traffic are never service-worker cached. A previously loaded app/trip can reopen with the server disconnected.
+- Tests cover persistent reload recovery, user isolation, lost replies after server commit, mixed accepted/rejected batches, retryable failures, concurrent tabs, and batching. Browser verification saved **Offline recovery check (demo)** for ₹0.01 with the server stopped, reloaded successfully, then synced it once on reconnection.
+- Open each trip online at least once before using it offline. Keep or reopen the app to sync; closed-app background sync is not implemented. Clearing browser site data removes unsynced payments and the local session. Installation prompts/icons and public HTTPS deployment are still pending.
 
 ## UI usability refinement
 

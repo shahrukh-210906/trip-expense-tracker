@@ -69,10 +69,13 @@ test('live MongoDB API workflow in an isolated disposable database',async t=>{
       const contributions=await Promise.all([sync(member.token,contribution),sync(member.token,contribution)]);
       assert.ok(contributions.every(r=>r.syncedCount===1));
       assert.equal((await request('/trips/'+trip._id,lead.token)).trip.purseBalancePaise,1000);
-      assert.equal((await sync(member.token,entry({ledger:'purse',kind:'expense',amountPaise:100}))).errors.length,1);
+      const forbidden=await sync(member.token,entry({ledger:'purse',kind:'expense',amountPaise:100}));
+      assert.equal(forbidden.errors.length,1);
+      assert.equal(forbidden.errors[0].retryable,false);
       const spent=await Promise.all([sync(lead.token,entry({ledger:'purse',kind:'expense',amountPaise:700})),
         sync(lead.token,entry({ledger:'purse',kind:'expense',amountPaise:700}))]);
       assert.equal(spent.reduce((sum,r)=>sum+r.syncedCount,0),1);
+      assert.equal(spent.flatMap(r=>r.errors)[0].retryable,false);
       const leadView=await request('/trips/'+trip._id,lead.token),memberView=await request('/trips/'+trip._id,member.token);
       assert.equal(leadView.trip.purseBalancePaise,300);
       assert.equal(leadView.purseEntries.length,2);assert.equal(memberView.purseEntries.length,1);
