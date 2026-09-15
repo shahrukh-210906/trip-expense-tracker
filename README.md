@@ -1,48 +1,41 @@
 # Trip Expense Tracker
 
-MERN Progressive Web App based on **Project Specification: Trip Expense Tracker App V2**.
+## Current requirements (user revision)
 
-## Step 1: interactive design prototype
+Everyone records their own out-of-pocket payments. A payment can be for the payer, one friend, or several selected travelers. There is no pooled Kitty, contribution collection, or money-received workflow. These instructions supersede the corresponding requirements in the original PDF and earlier prototypes.
 
-Run `npm run dev` and open http://127.0.0.1:5173. Run `npm run check` for JavaScript syntax validation. Node.js is the only dependency at this stage.
+- One Add expense action. Payer is the current traveler.
+- Select beneficiaries independently of the payer; paying entirely for a friend is supported.
+- Split equally across selected people using integer paise; distribute any remaining paise in stable selection order.
+- Self-only expenses create no debts and are hidden from other travelers' activity.
+- Show direct balances between each pair after offsetting payments in both directions.
+- Each traveler sees What I paid and Who owes whom.
 
-The prototype covers overview, shared Kitty deposits and expenses, private Personal Pocket, a refund illustration, create/join forms, and simulated offline pending states. Amounts use integer paise. It contains sample data and resets on refresh. No payments, authentication, database, real sync, or production authorization exist yet. The temporary working title is **Roam**.
+## Run
 
-The specification requests Figma wireframes. This repository provides a browser-based substitute; no Figma artifact has been created.
+`npm run dev`, then open http://127.0.0.1:5173. `npm run check` validates JavaScript syntax.
 
-## Delivery stages
+This is an interactive design prototype. The Preview as selector simulates separate accounts, not real authentication. Data resets on refresh. Offline mode simulates pending labels; no durable storage, server sync, or real payments are connected.
 
-| Step | Deliverable | Status |
-| --- | --- | --- |
-| 1 | Mobile-first UI flows and offline state wireframes | Browser prototype implemented |
-| 2 | MongoDB Atlas and Mongoose schemas | Next |
-| 3 | Express API, JWT identity, unique join codes | Planned |
-| 4 | Authorized Kitty/personal ledgers and idempotent batch sync | Planned |
-| 5 | Net balances, settlements, pairwise ledger | Planned |
-| 6 | Authenticated Socket.io trip events | Planned |
-| 7 | React responsive frontend wired to API | Planned |
-| 8 | IndexedDB, offline queue, service worker, installable PWA | Planned |
-| 9 | Render backend and Vercel frontend deployment | Planned |
-| 10 | Share link and installation instructions | Planned |
+## Roadmap
 
-Each stage should have a separate commit and GitHub push, followed by a completion report. GitHub publishing requires a repository remote and authenticated Git access.
+1. UI prototype: implemented, revised for self-recorded payments and friends' debts.
+2. MongoDB/Mongoose schemas: next, using payer and selected beneficiaries; no deposit model.
+3. Express/JWT identity and trip join codes.
+4. Expense APIs, ownership authorization, and idempotent batch sync.
+5. Verified settlement logic and detailed pairwise history.
+6. Socket.io trip updates, excluding self-only expenses.
+7. React frontend connected to the API.
+8. IndexedDB offline queue and installable PWA.
+9. Render/Vercel deployment.
+10. Sharing and installation guide.
+
+Each completed stage or requested revision is committed and pushed to https://github.com/shahrukh-210906/trip-expense-tracker.
+
+## Verification of this revision
+
+JavaScript syntax checks pass. Browser check: recording ₹600 entirely for Aarav increased his pre-existing ₹600 net debt to ₹1,200; switching to Aarav showed the matching amount owed. The form displays each beneficiary's share before saving. A self-only sample appears only in the payer's own expenses. Real authorization and durable multi-user behavior remain future work.
 
 ## Next-stage setup
 
-Provide the GitHub repository URL. For live database verification in Step 2, create a MongoDB Atlas cluster, database user, and network access rule for your development machine. Store the connection URI in a local ignored `.env` file as `MONGODB_URI`; never put credentials in committed files or chat. Mongoose schema implementation can proceed before the cluster is ready.
-
-## Decisions carried into implementation
-
-- Joining by PIN enrolls an authenticated identity; a PIN must not grant group-lead authority. Rate-limit joins and enforce role checks on the server.
-- Personal entries are readable by their owner only and excluded from shared events and settlements.
-- Deposits require a dedicated ledger model (missing from the abbreviated PDF schema). Treat the Kitty as a virtual clearing account when calculating refunds.
-- Use integer minor currency units and deterministic remainder allocation. Never use floating-point arithmetic for balances.
-- Batch sync needs client-generated IDs and a uniqueness constraint to prevent duplicate charges after retries. Preserve client event time separately from server receipt time.
-- A six-character code requires collision handling. JWT sessions require expiry and secure storage choices before deployment.
-- The specification does not define direct person-to-person funded shared expenses despite requesting a pairwise ledger. Resolve the schema in Step 4 and document how the ledger relates to Kitty contributions.
-- Greedy settlement minimizes transfers heuristically but does not always prove the global minimum. Step 5 must document the algorithm and its guarantees.
-- Offline entries remain pending until acknowledged by the server. Background sync support varies; app-open reconnect sync is also necessary.
-
-## Step 1 UI revision
-
-Separated Group fund (shared money available) from My expenses (personal spending total). Three explicit actions replace ambiguous expense/deposit labels. Contribution forms ask who paid; expense forms ask what was bought. Each form previews its balance effect and reports insufficient funds inside the dialog. Checked a ₹500 contribution and a ₹250 personal expense: only the contribution changed the group balance. JavaScript syntax checks pass.
+MongoDB schema work can begin without a cloud account. Live database verification requires an Atlas cluster and a local ignored `.env` with `MONGODB_URI`. Do not commit credentials.
