@@ -42,3 +42,7 @@ Provide the GitHub repository URL. For live database verification in Step 2, cre
 - The specification does not define direct person-to-person funded shared expenses despite requesting a pairwise ledger. Resolve the schema in Step 4 and document how the ledger relates to Kitty contributions.
 - Greedy settlement minimizes transfers heuristically but does not always prove the global minimum. Step 5 must document the algorithm and its guarantees.
 - Offline entries remain pending until acknowledged by the server. Background sync support varies; app-open reconnect sync is also necessary.
+
+## Step 1 UI revision
+
+Separated Group fund (shared money available) from My expenses (personal spending total). Three explicit actions replace ambiguous expense/deposit labels. Contribution forms ask who paid; expense forms ask what was bought. Each form previews its balance effect and reports insufficient funds inside the dialog. Checked a ₹500 contribution and a ₹250 personal expense: only the contribution changed the group balance. JavaScript syntax checks pass.
