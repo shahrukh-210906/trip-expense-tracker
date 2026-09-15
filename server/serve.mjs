@@ -1,55 +1,18 @@
+import { resolve } from 'node:path';
 import express from 'express';
-import mongoose from 'mongoose';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import cors from 'cors';
-import dotenv from 'dotenv';
-
-import tripRoutes from './routes/tripRoutes.mjs';
-import expenseRoutes from './routes/expenseRoutes.mjs';
-
-dotenv.config();
-
-const app = express();
-const httpServer = createServer(app);
-
-// Setup Real-Time Sockets[cite: 2]
-const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
-});
-
-// Make io accessible inside route handlers
-app.set('io', io);
-
-app.use(cors());
-app.use(express.json());
-
-// Routes
-app.use('/api/trips', tripRoutes);
-app.use('/api/expenses', expenseRoutes);
-
-// Socket.io Connection Logic
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-
-  // Users join a "room" specific to their trip to get live updates
-  socket.on('joinTripRoom', (tripId) => {
-    socket.join(tripId);
-    console.log(`Socket ${socket.id} joined trip room ${tripId}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-  });
-});
-
-// Database and Server Init
-const PORT = process.env.PORT || 5000;
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
-    httpServer.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  })
-  .catch(err => console.error('MongoDB connection error:', err));
+import { connectDatabase,disconnectDatabase } from './database.mjs';
+import { createModels } from './models.mjs';
+import { createApp } from './app.mjs';
+try{
+  const connection=await connectDatabase(),models=createModels(connection);
+  for(const model of Object.values(models))await model.createIndexes();
+  const app=createApp(models,connection);
+  app.use(express.static(resolve('client/dist')));
+  app.get('/{*path}',(req,res)=>res.sendFile(resolve('client/dist/index.html')));
+  const server=app.listen(process.env.PORT||5000,'127.0.0.1',()=>console.log('Trip app ready on http://127.0.0.1:'+(process.env.PORT||5000)));
+  const stop=()=>server.close(async()=>{await disconnectDatabase();process.exit(0);});
+  process.on('SIGINT',stop);process.on('SIGTERM',stop);
+}catch{
+  console.error('Startup failed. Check MongoDB configuration with npm run db:check.');
+  await disconnectDatabase();process.exitCode=1;
+}

@@ -1,53 +1,83 @@
 # Trip Expense Tracker
 
-## Current requirements (user revision)
+A React + Express + MongoDB app for personal payments, direct debts between travelers, and a separate group purse. The original design prototype remains in `prototype/`.
 
-Everyone records their own out-of-pocket payments. A payment can be for the payer, one friend, or several selected travelers. A separate group purse is available only to designated group leads. There is no money-received logging workflow. These instructions supersede the corresponding requirements in the original PDF and earlier prototypes.
+## Task status — September 15, 2026
 
-- One Add expense action. Payer is the current traveler.
-- Select beneficiaries independently of the payer; paying entirely for a friend is supported.
-- Split equally across selected people using integer paise; distribute any remaining paise in stable selection order.
-- Self-only expenses create no debts and are hidden from other travelers' activity.
-- Show direct balances between each pair after offsetting payments in both directions.
-- Each traveler sees What I paid and Who owes whom.
+| Stage | Status |
+| --- | --- |
+| UI prototype | Completed in the earlier task |
+| MongoDB connection | Verified with the configured Atlas database |
+| Models and access rules | Repaired and tested; personal expenses and purse entries use separate collections |
+| Traveler identity and trip codes | Working browser sessions, create/join, and membership checks |
+| Expense API and retry protection | Working for personal payments, contributions, and lead-only spending |
+| Settlement calculations | Direct pairwise offsets with integer paise and deterministic remainder allocation |
+| React integration | Working onboarding, overview, personal pocket, balances, group purse, and unified Add expense |
+| Real-time updates | Pending; the unsafe unauthenticated socket broadcast was removed; use Refresh trip |
+| Offline queue and installable PWA | Pending; saves currently require connectivity |
+| Public deployment and account recovery | Pending |
 
-## Run
+### Bugs repaired
 
-`npm run dev`, then open http://127.0.0.1:5173. `npm run check` validates JavaScript syntax.
+- API models had replaced the earlier schema contract, breaking `createModels` and all existing tests.
+- Settlement ignored personal payments and could incorrectly treat group-purse spending as money owed to a lead.
+- Joining and expense writes trusted client-supplied identities; every frontend user used one dummy ID.
+- Expense retries created duplicates, and purse spending could race or reduce the balance before an expense was saved.
+- Socket rooms admitted anyone and broadcast private expenses.
+- Frontend styling referenced Tailwind without configuring it, producing an effectively unstyled build.
+- React and React DOM were not declared as direct frontend dependencies.
 
-This is an interactive design prototype. The Preview as selector simulates separate accounts, not real authentication. Data resets on refresh. Offline mode simulates pending labels; no durable storage, server sync, or real payments are connected.
+## Run the connected app
 
-## Roadmap
+Requires Node.js 22.15+ and a MongoDB replica set (Atlas works). Purse writes use transactions.
 
-1. UI prototype: implemented, revised for self-recorded payments and friends' debts.
-2. MongoDB/Mongoose schemas: next, with personal payer/beneficiary records and a separate group purse plus designated leads.
-3. Express/JWT identity and trip join codes.
-4. Expense APIs, ownership authorization, and idempotent batch sync.
-5. Verified settlement logic and detailed pairwise history.
-6. Socket.io trip updates, excluding self-only expenses.
-7. React frontend connected to the API.
-8. IndexedDB offline queue and installable PWA.
-9. Render/Vercel deployment.
-10. Sharing and installation guide.
+```powershell
+npm ci
+npm --prefix client ci
+```
 
-Each completed stage or requested revision is committed and pushed to https://github.com/shahrukh-210906/trip-expense-tracker.
+Put `MONGODB_URI` and optionally `MONGODB_DB_NAME` in the root `.env`, using `.env.example` as a guide. The server reads the root `.env`; `server/.env` is not used. Credentials remain ignored by Git.
 
-## Verification of this revision
+```powershell
+npm run db:check
+npm run build
+npm run dev
+```
 
-JavaScript syntax checks pass. Browser check: recording ₹600 entirely for Aarav increased his pre-existing ₹600 net debt to ₹1,200; switching to Aarav showed the matching amount owed. The form displays each beneficiary's share before saving. A self-only sample appears only in the payer's own expenses. Real authorization and durable multi-user behavior remain future work.
+Open [the local app](http://127.0.0.1:5000/). The server serves the built React app and API on the same origin. It listens only on localhost. Startup creates the required indexes; failures stop startup.
 
-## Next-stage setup
+For React hot reload, keep the API running and run `npm run dev:client` in another terminal. Vite proxies `/api` to port 5000. For the old in-memory UI prototype, run `npm run dev:prototype`.
 
-MongoDB schema work can begin without a cloud account. Live database verification requires an Atlas cluster and a local ignored `.env` with `MONGODB_URI`. Do not commit credentials.
+## Current behavior
 
-## Group purse clarification
+- Each browser creates a distinct traveler session; the server stores only its token hash. Requests derive the payer from that session, never a client-supplied user ID.
+- Session and active-trip selection survive refresh. Sessions are browser-bound bearer credentials, with no password, expiry, cross-device recovery, or verified identity yet. Clearing browser storage loses access to that identity. This is a development milestone, not a public account system.
+- Travelers record their own payments for themselves, friends, or any selected combination. A payer need not be a beneficiary.
+- Money uses integer paise. Splits distribute remainder paise in selected beneficiary order. Direct debts offset only payments between the same pair.
+- Self-only expenses are hidden from everyone else, including leads. Other shared personal payments and direct balances are visible to trip members.
+- **Contribution to group purse** remains inside **Add expense**. Members see only their own contributions; leads see all purse entries and its balance.
+- Only leads spend from the purse. The purse starts at zero and is funded by contributions. Purse entries never change personal debts.
+- Purse balance updates and ledger insertion commit together in a transaction. Concurrent spending cannot overdraw the purse.
+- A unique `(tripId, recordedBy, clientId)` index per ledger prevents duplicate writes on retries. Reusing an ID for different content returns an error. The frontend retains its ID when retrying an unchanged open form; it has no durable offline queue yet.
+- These are records of payments already made. The app does not transfer money or record money received.
 
-Both purses are required. All travelers log their own personal-pocket payments, including payments for friends. Only group leads can view the group purse balance/history or record its expenses. The prototype uses a sample ₹20,000 opening balance; the funding setup remains to be finalized. Group expenses do not become debts owed personally to the lead. Browser verification: a ₹500 group payment reduced the purse to ₹19,500, while switching to Aarav hid the purse and preserved his ₹600 personal debt. Account switching closes expense dialogs. These client-side role checks are a UI simulation, not security: the backend must enforce lead-only reads and writes and prevent unauthorized socket payloads.
+## Verification
 
-## Individual contributions
+```powershell
+npm run check
+npm test
+npm run test:integration
+npm run build
+```
 
-Every traveler can record their own payment into the group purse using Contribute to purse. The payer is the current traveler and cannot be selected as someone else. Members see only their own contribution history; leads see all contributions alongside purse expenses. Contributions increase the purse balance and remain separate from personal expense debts. This records money already paid; it does not execute a transfer. The future API must enforce contributor ownership and lead-only purse access. Browser verification: Aarav recorded ₹500; his own history showed ₹500 and the lead's purse increased from ₹20,000 to ₹20,500, with ₹0 spent. Full purse access remained hidden for Aarav. Data and role controls remain prototype simulations.
+- 16 local tests cover schemas, authorization rules, private visibility, integer splits, and direct offsets.
+- Live integration tests cover distinct identities, create/join, membership, private expenses, impersonation rejection, concurrent retries, changed-payload rejection, contributions, and concurrent overspending.
+- Integration tests create a fresh `ttest_<uuid>` database and remove only that generated database in cleanup. The configured application database is not cleared.
+- Browser-verified trip creation, a private ₹50 payment, a ₹500 contribution, a ₹125 group expense, and the ₹375 purse balance persisting after reload. These records are clearly labeled in **Demo trip — browser check** under **Demo traveler**.
+- Read-only legacy audit before this stage found zero old-format trips and zero old-format expenses. No data migration or deletion was needed.
 
-### Contribution entry refinement
+## Next stage
 
-Contributions are now a choice inside the existing Add expense form: select Contribution to group purse, then enter the amount. The separate contribution navigation and page were removed. Own contribution history appears under Personal pocket; leads still see all contributions in the group purse. Browser-checked saving ₹500 as Aarav using the unified form and seeing it in his own history. GitHub publishing remains pending following the declined commit/push request.
+Add authenticated socket subscriptions with per-recipient visibility, then IndexedDB offline storage and durable sync. Account recovery, session expiry/revocation, invitation abuse controls, deployment configuration, and PWA installation follow before public release.
+
+[GitHub repository](https://github.com/shahrukh-210906/trip-expense-tracker)

@@ -1,57 +1,21 @@
-export const calculateSettlement = (expenses, participants) => {
-  const balances = {};
-  participants.forEach(userId => {
-    balances[userId.toString()] = 0;
-  });
-
-  expenses.forEach(expense => {
-    // Completely ignore personal pockets
-    if (expense.expenseType === 'personal') return;
-
-    const amount = expense.amount;
-    const payerId = expense.paidBy.toString();
-    const splitAmong = expense.splitAmong.map(id => id.toString());
-    const splitAmount = amount / splitAmong.length;
-
-    if (balances[payerId] !== undefined) balances[payerId] += amount;
-    
-    splitAmong.forEach(userId => {
-      if (balances[userId] !== undefined) balances[userId] -= splitAmount;
+// All amounts are integer paise. Offset only direct debts between each pair.
+export function calculateSettlement(expenses, participants) {
+  const members = new Set(participants.map(String)), pairs = new Map();
+  for (const expense of expenses) {
+    const payer = String(expense.recordedBy), people = expense.splitAmong.map(String), amount = expense.amountPaise;
+    if (!Number.isSafeInteger(amount) || amount <= 0 || !members.has(payer) ||
+        !people.length || new Set(people).size !== people.length || people.some(id => !members.has(id)))
+      throw new Error('Invalid personal expense in settlement.');
+    const base = Math.floor(amount / people.length), remainder = amount % people.length;
+    people.forEach((person, index) => {
+      if (person === payer) return;
+      const [a,b] = [person,payer].sort(), key = a + ':' + b, share = base + (index < remainder ? 1 : 0);
+      const next = (pairs.get(key)?.amountPaise || 0) + (person === a ? share : -share);
+      if (!Number.isSafeInteger(next)) throw new Error('Settlement exceeds supported amount.');
+      pairs.set(key, { a,b,amountPaise:next });
     });
-  });
-
-  const debtors = [];
-  const creditors = [];
-
-  for (const [userId, balance] of Object.entries(balances)) {
-    const roundedBalance = Math.round(balance * 100) / 100; 
-    if (roundedBalance < 0) debtors.push({ userId, amount: Math.abs(roundedBalance) });
-    else if (roundedBalance > 0) creditors.push({ userId, amount: roundedBalance });
   }
-
-  debtors.sort((a, b) => b.amount - a.amount);
-  creditors.sort((a, b) => b.amount - a.amount);
-
-  const transactions = [];
-  let i = 0, j = 0;
-
-  while (i < debtors.length && j < creditors.length) {
-    const debtor = debtors[i];
-    const creditor = creditors[j];
-    const settledAmount = Math.min(debtor.amount, creditor.amount);
-
-    transactions.push({
-      from: debtor.userId,
-      to: creditor.userId,
-      amount: Math.round(settledAmount * 100) / 100
-    });
-
-    debtor.amount -= settledAmount;
-    creditor.amount -= settledAmount;
-
-    if (debtor.amount === 0) i++;
-    if (creditor.amount === 0) j++;
-  }
-
-  return transactions;
-};
+  return [...pairs.values()].filter(p=>p.amountPaise!==0).map(p=>({
+    from:p.amountPaise>0?p.a:p.b, to:p.amountPaise>0?p.b:p.a, amountPaise:Math.abs(p.amountPaise)
+  }));
+}

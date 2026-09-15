@@ -1,55 +1,60 @@
 import express from 'express';
-import { Expense, Trip } from '../models.mjs';
-
-const router = express.Router();
-
-const processExpense = async (expenseData) => {
-  const { tripId, title, amount, expenseType, paidBy, splitAmong, clientCreatedAt } = expenseData;
-  const trip = await Trip.findById(tripId);
-  if (!trip) throw new Error('Trip not found');
-
-  if (expenseType === 'kitty') {
-    if (trip.groupLead.toString() !== paidBy.toString()) throw new Error('Only Group Lead uses Kitty');
-    trip.kittyBalance -= amount;
-    await trip.save();
-  }
-
-  const finalSplit = expenseType === 'personal' ? [paidBy] : splitAmong;
-
-  const newExpense = new Expense({
-    tripId, title, amount, expenseType, paidBy, splitAmong: finalSplit, clientCreatedAt
-  });
-
-  return await newExpense.save();
-};
-
-router.post('/sync', async (req, res) => {
-  try {
-    const { offlineExpenses } = req.body;
-    if (!Array.isArray(offlineExpenses) || offlineExpenses.length === 0) {
-      return res.status(400).json({ error: 'No expenses to sync' });
-    }
-
-    const savedExpenses = [];
-    const errors = [];
-    const io = req.app.get('io'); // Retrieve Socket.io instance
-
-    for (const expenseData of offlineExpenses) {
-      try {
-        const saved = await processExpense(expenseData);
+import mongoose from 'mongoose';
+import { assertCanRecord } from '../access.mjs';
+export function expenseRoutes(models,connection){
+  const {Trip,PersonalExpense,PurseEntry}=models,router=express.Router();
+  router.post('/sync',async(req,res)=>{
+    const entries=req.body.offlineExpenses;
+    if(!Array.isArray(entries)||!entries.length||entries.length>100)
+      return res.status(400).json({error:'Send between 1 and 100 entries.'});
+    const savedExpenses=[],errors=[];
+    for(const input of entries){
+      try{
+        if(!input||!mongoose.isObjectIdOrHexString(input.tripId)||!['personal','purse'].includes(input.ledger))
+          throw new Error('Invalid trip or ledger.');
+        if((input.recordedBy&&String(input.recordedBy)!==String(req.user._id))||input.paidBy)
+          throw new Error('You may only record your own payment.');
+        const Model=input.ledger==='personal'?PersonalExpense:PurseEntry;
+        const entry=new Model({tripId:input.tripId,recordedBy:req.user._id,clientId:input.clientId,
+          clientCreatedAt:input.clientCreatedAt,title:input.title,amountPaise:input.amountPaise,
+          ...(input.ledger==='personal'?{splitAmong:input.splitAmong}:{kind:input.kind})});
+        await entry.validate();
+        const trip=await Trip.findById(input.tripId);
+        if(!trip)throw new Error('Trip not found.');
+        assertCanRecord(trip,req.user._id,entry,input.ledger);
+        const identity={tripId:entry.tripId,recordedBy:entry.recordedBy,clientId:entry.clientId};
+        let saved=await Model.findOne(identity);
+        if(!saved){
+          try{
+            if(input.ledger==='purse'){
+              await connection.transaction(async session=>{
+                const prior=await Model.findOne(identity).session(session);
+                if(prior){saved=prior;return;}
+                const delta=entry.kind==='expense'?-entry.amountPaise:entry.amountPaise;
+                const updated=await Trip.updateOne({_id:trip._id,purseBalancePaise:delta<0?
+                  {$gte:-delta}:{$lte:Number.MAX_SAFE_INTEGER-delta}},{$inc:{purseBalancePaise:delta}},{session});
+                if(!updated.modifiedCount)throw new Error('Insufficient purse balance or balance limit reached.');
+                [saved]=await Model.create([entry.toObject()],{session});
+              });
+            }else saved=await entry.save();
+          }catch(error){
+            if(error.code!==11000)throw error;
+            saved=await Model.findOne(identity);
+            if(!saved)throw new Error('An opening balance has already been recorded.');
+          }
+        }
+        const comparable=e=>JSON.stringify({title:e.title,amountPaise:e.amountPaise,kind:e.kind,
+          splitAmong:e.splitAmong?.map(String),clientCreatedAt:new Date(e.clientCreatedAt).toISOString()});
+        if(comparable(saved)!==comparable(entry))throw new Error('This client ID was already used for a different entry.');
         savedExpenses.push(saved);
-        
-        // Broadcast to the Live Feed[cite: 2]
-        io.to(expenseData.tripId.toString()).emit('newExpense', saved);
-      } catch (err) {
-        errors.push({ title: expenseData.title, error: err.message });
+      }catch(error){
+        const safe=error.name==='ValidationError'?'Check the amount, description, beneficiaries, and entry ID.':
+          error.name==='MongoServerError'?'Database write failed. Purse writes require a replica set such as Atlas.':
+          error.message;
+        errors.push({clientId:input?.clientId,error:safe});
       }
     }
-
-    res.status(200).json({ success: true, syncedCount: savedExpenses.length, savedExpenses, errors });
-  } catch (error) {
-    res.status(500).json({ error: 'Batch sync failed' });
-  }
-});
-
-export default router;
+    res.json({syncedCount:savedExpenses.length,savedExpenses,errors});
+  });
+  return router;
+}
