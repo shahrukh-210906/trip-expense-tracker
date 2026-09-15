@@ -2,5 +2,18 @@
   "name": "trip-expense-tracker",
   "version": "0.1.0",
   "private": true,
-  "scripts": { "dev": "node scripts/serve.mjs", "check": "node --check prototype/app.js && node --check scripts/serve.mjs" }
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check": "node --check prototype/app.js && node --check scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "db:check": "node scripts/database.mjs",
+    "db:indexes": "node scripts/database.mjs --indexes"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "mongoose": "^9.10.1"
+  },
+  "engines": {
+    "node": ">=22.15.0"
+  }
 }
