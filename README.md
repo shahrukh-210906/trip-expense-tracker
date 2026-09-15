@@ -12,7 +12,7 @@ A React + Express + MongoDB app for personal payments, direct debts between trav
 | Traveler identity and trip codes | Working browser sessions, create/join, and membership checks |
 | Expense API and retry protection | Working for personal payments, contributions, and lead-only spending |
 | Settlement calculations | Direct pairwise offsets with integer paise and deterministic remainder allocation |
-| React integration | Working onboarding, overview, personal pocket, balances, group purse, and unified Add expense |
+| React integration | Working trip selection, expenses, balances, group purse, and unified Add expense |
 | Real-time updates | Pending; the unsafe unauthenticated socket broadcast was removed; use Refresh trip |
 | Offline queue and installable PWA | Pending; saves currently require connectivity |
 | Public deployment and account recovery | Pending |
@@ -79,5 +79,15 @@ npm run build
 ## Next stage
 
 Add authenticated socket subscriptions with per-recipient visibility, then IndexedDB offline storage and durable sync. Account recovery, session expiry/revocation, invitation abuse controls, deployment configuration, and PWA installation follow before public release.
+
+## UI usability refinement
+
+- Three focused sections replace the overlapping overview and personal-pocket pages: **Expenses**, **Balances**, and **Group purse**.
+- Expenses has one searchable ledger with **My payments** and **Shared expenses** views. Expand a payment to see each person's share. Private entries carry an **Only you** label.
+- Balances leads with who owes you and whom you owe. Whole-trip balances are available on demand.
+- The purse has a distinct funds summary, money-in/money-out history filters, and one contextual **Record purse spending** action.
+- Add expense presents explicit payment types: personal expense, contribution, and (for leads) purse spending. It previews the split or purse effect before saving. The heading and save action remain visible while the form body scrolls.
+- Trip selection separates existing trips from creating or joining a trip. Invitation codes and the member list are available from the traveler control.
+- Browser verification covered the redesigned workspace, expandable payment details, saving and finding a private ₹0.01 **UI review check (demo)** expense, and the purse layout at a 390px phone breakpoint. The production frontend build passes.
 
 [GitHub repository](https://github.com/shahrukh-210906/trip-expense-tracker)
