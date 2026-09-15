@@ -1,0 +1,6 @@
+{
+  "name": "trip-expense-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "dev": "node scripts/serve.mjs", "check": "node --check prototype/app.js && node --check scripts/serve.mjs" }
+}
