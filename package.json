@@ -10,8 +10,11 @@
     "db:indexes": "node scripts/database.mjs --indexes"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "mongoose": "^9.10.1"
+    "express": "^5.2.1",
+    "mongoose": "^9.10.1",
+    "socket.io": "^4.8.3"
   },
   "engines": {
     "node": ">=22.15.0"
