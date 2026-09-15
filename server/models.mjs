@@ -24,6 +24,7 @@ export const userSchema = new Schema({
   tokenHash: { type: String, select: false },
   tokenCreatedAt: { type: Date },
   tokenRevokedAt: { type: Date },
+  recoveryCodeHash: { type: String, select: false },
 }, options);
 userSchema.index({ tokenHash: 1 }, { unique: true, sparse: true });
 

@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 export const tokenHash = token => createHash('sha256').update(token).digest('hex');
 export const newToken = () => randomBytes(32).toString('hex');
+export const newRecoveryCode = () => randomBytes(8).toString('hex').toUpperCase();
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 export function authenticate(User) {
   return async (req,res,next) => {
