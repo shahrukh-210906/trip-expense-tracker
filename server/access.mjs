@@ -8,8 +8,7 @@ export function canReadPersonalExpense(trip, userId, expense) {
     (!isSelfOnly(expense) || same(expense.recordedBy, userId));
 }
 export function canReadPurseEntry(trip, userId, entry) {
-  return same(entry.tripId, trip._id) && isMember(trip, userId) &&
-    (isLead(trip, userId) || (entry.kind === 'contribution' && same(entry.recordedBy, userId)));
+  return same(entry.tripId, trip._id) && isMember(trip, userId);
 }
 export function assertCanRecord(trip, userId, entry, ledger) {
   if (!same(entry.tripId, trip._id) || !isMember(trip, userId) || !same(entry.recordedBy, userId)) {
@@ -22,5 +21,7 @@ export function assertCanRecord(trip, userId, entry, ledger) {
   } else if (ledger === 'purse') {
     if (!['opening', 'contribution', 'expense'].includes(entry.kind)) throw new Error('Invalid purse entry.');
     if (entry.kind !== 'contribution' && !isLead(trip, userId)) throw new Error('Only group leads may manage the purse.');
+    if (entry.kind === 'expense' && (!entry.splitAmong?.length || !entry.splitAmong.every(id=>isMember(trip,id))))
+      throw new Error('Choose trip members who share this Kitty expense.');
   } else throw new Error('Unknown ledger.');
 }

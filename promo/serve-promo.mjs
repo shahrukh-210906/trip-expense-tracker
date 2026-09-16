@@ -1,0 +1,2 @@
+import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+const root=process.cwd(); http.createServer((req,res)=>{const file=path.join(root,decodeURIComponent(req.url==='/'?'/export-video.html':req.url)); if(!file.startsWith(root)||!fs.existsSync(file)){res.writeHead(404);return res.end('Not found')} res.writeHead(200,{'Content-Type':'text/html'}); fs.createReadStream(file).pipe(res)}).listen(8000);

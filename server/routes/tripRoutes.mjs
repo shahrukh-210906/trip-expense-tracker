@@ -3,11 +3,11 @@ import { randomInt } from 'node:crypto';
 import mongoose from 'mongoose';
 import { isMember,isLead,canReadPersonalExpense,canReadPurseEntry } from '../access.mjs';
 import { calculateSettlement } from '../utils/settlement.mjs';
+import { calculateKittySettlement } from '../utils/kittySettlement.mjs';
 export function tripRoutes(models) {
   const {Trip,User,PersonalExpense,PurseEntry}=models, router=express.Router();
   const publicTrip=(trip,userId)=>{
     const result=trip.toObject();
-    if (!isLead(trip,userId)) delete result.purseBalancePaise;
     return result;
   };
   router.get('/',async(req,res)=>{
@@ -30,7 +30,7 @@ export function tripRoutes(models) {
   router.post('/join',async(req,res)=>{
     const joinCode=typeof req.body.joinCode==='string'?req.body.joinCode.trim().toUpperCase():'';
     if(!/^[A-Z0-9]{6}$/.test(joinCode))return res.status(400).json({error:'Enter the six-character trip code.'});
-    const trip=await Trip.findOneAndUpdate({joinCode,$or:[{participants:req.user._id},{'participants.99':{$exists:false}}]},
+    const trip=await Trip.findOneAndUpdate({joinCode,status:{$ne:'ended'},$or:[{participants:req.user._id},{'participants.99':{$exists:false}}]},
       {$addToSet:{participants:req.user._id}},{returnDocument:'after'});
     if(!trip)return res.status(404).json({error:'Trip code not found or trip is full.'});
     req.app.get('live')?.membersChanged(trip);
@@ -52,11 +52,18 @@ export function tripRoutes(models) {
     res.json({trip:publicTrip(trip,req.user._id),members,
       expenses:expenses.filter(e=>canReadPersonalExpense(trip,req.user._id,e)),
       purseEntries:purseEntries.filter(e=>canReadPurseEntry(trip,req.user._id,e)),
-      transactions:calculateSettlement(expenses,trip.participants)});
+      transactions:calculateSettlement(expenses,trip.participants),kittySettlement:calculateKittySettlement(purseEntries,trip)});
+  });
+  router.post('/:tripId/end',async(req,res)=>{
+    if(!isLead(req.trip,req.user._id))return res.status(403).json({error:'Only a group lead can end this trip.'});
+    const trip=await Trip.findOneAndUpdate({_id:req.trip._id,status:{$ne:'ended'}},{$set:{status:'ended',endedAt:new Date(),endedBy:req.user._id}},{returnDocument:'after'});
+    if(trip)req.app.get('live')?.membersChanged(trip);
+    res.json({trip:publicTrip(trip||req.trip,req.user._id)});
   });
   router.get('/:tripId/settlement',async(req,res)=>{
     const expenses=await PersonalExpense.find({tripId:req.trip._id});
-    res.json({transactions:calculateSettlement(expenses,req.trip.participants)});
+    const purseEntries=await PurseEntry.find({tripId:req.trip._id});
+    res.json({transactions:calculateSettlement(expenses,req.trip.participants),kittySettlement:calculateKittySettlement(purseEntries,req.trip)});
   });
   return router;
 }

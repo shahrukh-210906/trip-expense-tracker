@@ -20,6 +20,7 @@ const eventFields = () => ({
 });
 
 export const userSchema = new Schema({
+  firebaseUid: { type: String, select: false },
   displayName: { type: String, trim: true, required: true, maxlength: 60 },
   tokenHash: { type: String, select: false },
   tokenCreatedAt: { type: Date },
@@ -27,8 +28,13 @@ export const userSchema = new Schema({
   recoveryCodeHash: { type: String, select: false },
 }, options);
 userSchema.index({ tokenHash: 1 }, { unique: true, sparse: true });
+userSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
 
 export const tripSchema = new Schema({
+  status: { type: String, enum: ['active','ended'], default: 'active' },
+  endedAt: Date,
+  endedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  ledgerVersion: { type: Number, default: 0 },
   name: { type: String, required: true, trim: true, maxlength: 100 },
   currency: { type: String, enum: ['INR'], default: 'INR', immutable: true },
   joinCode: { type: String, required: true, uppercase: true, match: /^[A-Z0-9]{6}$/ },
@@ -40,7 +46,7 @@ export const tripSchema = new Schema({
       return values.every(id => this.participants.some(p => String(p) === String(id)));
     }, message: 'Every group lead must be a trip participant.' },
   ] },
-  purseBalancePaise: { ...money(0), default: 0, max: Number.MAX_SAFE_INTEGER },
+  purseBalancePaise: { ...money(-Number.MAX_SAFE_INTEGER), default: 0, max: Number.MAX_SAFE_INTEGER },
 }, options);
 tripSchema.index({ joinCode: 1 }, { unique: true });
 tripSchema.index({ participants: 1 });
@@ -58,6 +64,8 @@ export const purseEntrySchema = new Schema({
   kind: { type: String, required: true, enum: ['opening', 'contribution', 'expense'], immutable: true },
   title: { type: String, trim: true, required: true, maxlength: 100 },
   amountPaise: money(),
+  splitAmong: { type: [{type:Schema.Types.ObjectId,ref:'User'}], default: undefined,
+    validate: {validator: function(values){return values===undefined||uniqueIds(values);},message:'Choose distinct trip members.'} },
 }, options);
 
 // Unique indexes enforce retry protection in MongoDB, not document validation.

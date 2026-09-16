@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" role="img" aria-labelledby="title desc">
+ <title id="title">triproam logo</title><desc id="desc">A minimalist location pin with a shared travel route and triproam wordmark.</desc>
+ <rect width="720" height="180" rx="28" fill="#FFFAF0"/>
+ <g transform="translate(34 24)">
+  <path d="M64 0C28.7 0 0 28.7 0 64c0 43 64 92 64 92s64-49 64-92C128 28.7 99.3 0 64 0Z" fill="#24604D"/>
+  <circle cx="64" cy="61" r="25" fill="#FFFAF0"/>
+  <path d="M39 63c13-18 31-18 49-4 7 5 12 6 17 1" fill="none" stroke="#ED8D70" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="40" cy="63" r="6" fill="#ED8D70"/><circle cx="105" cy="60" r="6" fill="#F4C969"/>
+ </g>
+ <text x="190" y="116" fill="#163B32" font-family="Inter,Arial,sans-serif" font-size="78" font-weight="800" letter-spacing="-4">triproam</text>
+</svg>

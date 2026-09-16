@@ -22,7 +22,10 @@ test('live MongoDB API workflow in an isolated disposable database',async t=>{
     database=connection.useDb(databaseName,{useCache:true});
     const models=createModels(database);
     for(const model of Object.values(models))await model.createIndexes();
-    const app=createApp(models,database);
+    const app=createApp(models,database,{allowLegacyLogin:true,verifyToken:async token=>{
+      if(token==='invalid')throw new Error('Invalid token');
+      return {uid:'google-'+token,name:'Google traveler',email_verified:true,firebase:{sign_in_provider:token==='password'?'password':'google.com'}};
+    }});
     server=createServer(app);live=attachRealtime(server,models);app.set('live',live);
     server.listen(0,'127.0.0.1');
     await new Promise(resolve=>server.once('listening',resolve));
@@ -35,6 +38,22 @@ test('live MongoDB API workflow in an isolated disposable database',async t=>{
     }
     const lead=await request('/session',null,{displayName:'Lead'}),member=await request('/session',null,{displayName:'Member'}),
       outsider=await request('/session',null,{displayName:'Outsider'});
+    await t.test('Google sign-in verifies tokens, reuses identities, and links existing trips',async()=>{
+      assert.equal((await request('/session/google',null,{idToken:'invalid'})).status,401);
+      assert.equal((await request('/session/google',null,{idToken:'password'})).status,401);
+      const first=await request('/session/google',null,{idToken:'one'});
+      const again=await request('/session/google',null,{idToken:'one'});
+      assert.equal(first.status,200);assert.equal(first.user._id,again.user._id);
+      assert.equal((await request('/trips',first.token)).status,401);
+      const old=await request('/session',null,{displayName:'Existing traveler'});
+      const oldTrip=await request('/trips/create',old.token,{name:'Preserved trip'});
+      const linked=await request('/session/google',old.token,{idToken:'linked',link:true});
+      assert.equal(linked.user._id,old.user._id);
+      assert.equal((await request('/trips/'+oldTrip.trip._id,linked.token)).status,200);
+      assert.equal((await request('/session/google',outsider.token,{idToken:'linked',link:true})).status,409);
+      const relogin=await request('/session/google',null,{idToken:'linked'});
+      assert.equal(relogin.user._id,old.user._id);
+    });
     let trip;
     await t.test('authentication, creation, and joining use separate server identities',async()=>{
       assert.equal((await request('/trips')).status,401);
@@ -43,7 +62,7 @@ test('live MongoDB API workflow in an isolated disposable database',async t=>{
       assert.equal(created.status,201);trip=created.trip;
       assert.deepEqual(trip.groupLeads,[lead.user._id]);
       const joined=await request('/trips/join',member.token,{joinCode:trip.joinCode.toLowerCase()});
-      assert.equal(joined.status,200);assert.equal(joined.trip.purseBalancePaise,undefined);
+      assert.equal(joined.status,200);assert.equal(joined.trip.purseBalancePaise,0);
       await request('/trips/join',member.token,{joinCode:trip.joinCode});
       assert.equal((await request('/trips/'+trip._id,lead.token)).members.length,2);
       assert.equal((await request('/trips/'+trip._id,outsider.token)).status,404);
@@ -74,14 +93,33 @@ test('live MongoDB API workflow in an isolated disposable database',async t=>{
       assert.equal(forbidden.errors[0].retryable,false);
       const spent=await Promise.all([sync(lead.token,entry({ledger:'purse',kind:'expense',amountPaise:700})),
         sync(lead.token,entry({ledger:'purse',kind:'expense',amountPaise:700}))]);
-      assert.equal(spent.reduce((sum,r)=>sum+r.syncedCount,0),1);
-      assert.equal(spent.flatMap(r=>r.errors)[0].retryable,false);
+      assert.equal(spent.reduce((sum,r)=>sum+r.syncedCount,0),2);
+      assert.equal(spent.flatMap(r=>r.errors).length,0);
       const leadView=await request('/trips/'+trip._id,lead.token),memberView=await request('/trips/'+trip._id,member.token);
-      assert.equal(leadView.trip.purseBalancePaise,300);
-      assert.equal(leadView.purseEntries.length,2);assert.equal(memberView.purseEntries.length,1);
-      assert.equal(memberView.trip.purseBalancePaise,undefined);
+      assert.equal(leadView.trip.purseBalancePaise,-400);
+      assert.equal(leadView.purseEntries.length,3);assert.equal(memberView.purseEntries.length,3);
+      assert.equal(memberView.trip.purseBalancePaise,-400);
       assert.equal(leadView.transactions[0].amountPaise,60000);
-      assert.equal(await models.PurseEntry.countDocuments(),2);
+      assert.equal(await models.PurseEntry.countDocuments(),3);
+    });
+    await t.test('selected Kitty shares, refunds, and lead-only trip ending',async()=>{
+      const created=await request('/trips/create',lead.token,{name:'Final settlement test'});
+      const isolated=created.trip;
+      await request('/trips/join',member.token,{joinCode:isolated.joinCode});
+      const payment=entry({tripId:isolated._id,ledger:'purse',kind:'contribution',amountPaise:1000});
+      assert.equal((await sync(member.token,payment)).syncedCount,1);
+      const group=entry({tripId:isolated._id,ledger:'purse',kind:'expense',amountPaise:400,splitAmong:[member.user._id]});
+      assert.equal((await sync(lead.token,group)).syncedCount,1);
+      const view=await request('/trips/'+isolated._id,member.token);
+      assert.deepEqual(view.kittySettlement.transactions,[{from:lead.user._id,to:member.user._id,amountPaise:600}]);
+      assert.equal((await sync(lead.token,{...group,splitAmong:[lead.user._id]})).errors.length,1);
+      assert.equal((await request('/trips/'+isolated._id+'/end',member.token,{})).status,403);
+      assert.equal((await request('/trips/'+isolated._id+'/end',lead.token,{})).trip.status,'ended');
+      assert.equal((await sync(lead.token,group)).syncedCount,1);
+      assert.equal((await sync(member.token,entry({tripId:isolated._id}))).errors.length,1);
+      assert.equal((await sync(member.token,{...payment,clientId:randomUUID()})).errors.length,1);
+      assert.equal((await request('/trips/join',outsider.token,{joinCode:isolated.joinCode})).status,404);
+      assert.equal((await request('/trips/'+isolated._id,member.token)).trip.status,'ended');
     });
     const openSocket=async(token,tripId,expected='connect')=>{
       const socket=connectSocket(base,{auth:{token,tripId},transports:['websocket'],autoConnect:false,reconnection:false});
@@ -115,10 +153,10 @@ test('live MongoDB API workflow in an isolated disposable database',async t=>{
       await sync(outsider.token,entry({}));await verify([0,0,0]);
     });
     await t.test('purse visibility and failed spending apply equally to live notifications',async()=>{
-      await sync(lead.token,entry({ledger:'purse',kind:'contribution',amountPaise:100}));await verify([1,0,0]);
+      await sync(lead.token,entry({ledger:'purse',kind:'contribution',amountPaise:100}));await verify([1,1,0]);
       await sync(member.token,entry({ledger:'purse',kind:'contribution',amountPaise:100}));await verify([1,1,0]);
-      await sync(lead.token,entry({ledger:'purse',kind:'expense',amountPaise:1}));await verify([1,0,0]);
-      await sync(lead.token,entry({ledger:'purse',kind:'expense',amountPaise:100000}));await verify([0,0,0]);
+      await sync(lead.token,entry({ledger:'purse',kind:'expense',amountPaise:1}));await verify([1,1,0]);
+      await sync(lead.token,entry({ledger:'purse',kind:'expense',amountPaise:100000,splitAmong:[outsider.user._id]}));await verify([0,0,0]);
       memberSocket.emit('joinTripRoom',otherTrip._id);
       await sync(outsider.token,{...entry({}),tripId:otherTrip._id,splitAmong:[outsider.user._id]});
       await drain();assert.deepEqual(observations.map(events=>events.length),[0,0,1]);clear();

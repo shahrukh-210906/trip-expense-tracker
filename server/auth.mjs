@@ -3,6 +3,10 @@ export const tokenHash = token => createHash('sha256').update(token).digest('hex
 export const newToken = () => randomBytes(32).toString('hex');
 export const newRecoveryCode = () => randomBytes(8).toString('hex').toUpperCase();
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+export function sessionValid(user,now=Date.now()) {
+  const issued=user?.tokenCreatedAt?.getTime?.()||0;
+  return Boolean(user && issued && now-issued<SESSION_LIFETIME_MS && (!user.tokenRevokedAt||issued>user.tokenRevokedAt.getTime()));
+}
 export function authenticate(User) {
   return async (req,res,next) => {
     const token = req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
@@ -10,8 +14,7 @@ export function authenticate(User) {
     try {
       req.user = await User.findOne({tokenHash:tokenHash(token)}).select('+tokenHash');
       if (!req.user) return res.status(401).json({error:'Session expired. Please sign in again.'});
-      const issued = req.user.tokenCreatedAt?.getTime?.() || 0;
-      if ((req.user.tokenRevokedAt && issued <= req.user.tokenRevokedAt.getTime()) || (issued && Date.now() - issued > SESSION_LIFETIME_MS))
+      if (!sessionValid(req.user))
         return res.status(401).json({error:'Session expired. Please sign in again.'});
       next();
     } catch(error) { next(error); }

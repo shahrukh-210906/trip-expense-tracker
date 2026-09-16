@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "Triproam — Trip Expense Tracker",
+  "short_name": "Triproam",
+  "description": "Split travel expenses, track balances, and manage your group purse.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6fa",
+  "theme_color": "#3458db",
+  "icons": [
+    {"src":"/app-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/app-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/app-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ]
+}

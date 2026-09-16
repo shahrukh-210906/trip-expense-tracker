@@ -1,31 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, saveSession } from '../api.js';
 import { Icon } from './ui.jsx';
-
-export default function Onboarding({ session, onSession, onJoinSuccess, trips = [] }) {
-  const [mode, setMode] = useState(null);
-  const [name, setName] = useState(''), [tripName, setTripName] = useState(''), [pin, setPin] = useState('');
-  const [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const [recoveryCode, setRecoveryCode] = useState('');
-  async function createRecoveryCode() { setError(''); setBusy(true); try { const result = await api('/session/recovery-code', {}); setRecoveryCode(result.code); } catch (error) { setError(error.message); } finally { setBusy(false); } }
-  async function submit(event) {
-    event.preventDefault(); setError(''); setBusy(true);
-    try {
-      if (!session) { const result = await api('/session', { displayName: name }); saveSession(result); onSession(result); }
-      const result = await api('/trips/' + mode, mode === 'create' ? { name: tripName } : { joinCode: pin });
-      onJoinSuccess(result.trip._id);
-    } catch (error) { setError(error.message); } finally { setBusy(false); }
-  }
-  return <div className="onboarding"><span className="eyebrow">A PLACE FOR EVERY ADVENTURE</span><h1>{mode ? mode === 'join' ? 'Join your friends.' : 'Start a new trip.' : session ? 'Your trips' : 'Let’s get going.'}</h1>
-    <p className="intro-copy">{mode ? mode === 'join' ? 'Enter the six-character code shared by your group lead.' : 'Give your trip a name. You’ll get a code to invite everyone.' : trips.length ? 'Pick up where you left off, or plan something new.' : 'Create a trip or join your friends to start tracking expenses.'}</p>
-    {!mode ? <>{trips.length > 0 && <div className="trip-grid">{trips.map(trip => <button className="trip-tile" key={trip._id} onClick={() => onJoinSuccess(trip._id)}><span className="trip-tile-top"><span className="trip-mark"><Icon name="trip" size={24}/></span><span className="role-label">{trip.groupLeads.includes(session?.user._id) ? 'Group lead' : 'Traveler'}</span></span><strong>{trip.name}</strong><span className="trip-tile-bottom">Open trip<Icon name="arrow" size={18}/></span></button>)}</div>}
-      <div className="trip-actions"><button className="primary" onClick={() => setMode('create')}><Icon name="plus" size={18}/>Create a trip</button><button className="secondary" onClick={() => setMode('join')}><Icon name="users" size={18}/>Join with a code</button></div>
-      <div className="getting-started"><Icon name="expenses"/><p><strong>Your money, kept simple.</strong> Record what you paid, see who owes whom, and keep shared funds in a separate group purse.</p></div>
-      {session && <div className="getting-started"><Icon name="lock"/><p><strong>Keep access to your trips.</strong>{recoveryCode ? <><br/><code>{recoveryCode}</code><br/><small>Save this code somewhere safe. It works once on a new browser.</small></> : <button className="text-button" disabled={busy} onClick={createRecoveryCode}>Create a recovery code</button>}</p></div>}
-    </> : <section className="onboarding-form"><button disabled={busy} className="text-button" onClick={() => { setMode(null); setError(''); }}><Icon name="back" size={17}/>Back to my trips</button><form onSubmit={submit}><fieldset disabled={busy} className="form-fields">
-      {!session && <label>Your name<input required maxLength={60} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Shahrukh" autoComplete="given-name"/></label>}
-      {mode === 'create' ? <label>Trip name<input required maxLength={100} value={tripName} onChange={event => setTripName(event.target.value)} placeholder="e.g. Goa with friends"/></label> : <label>Trip code<input className="code-input" required pattern="[A-Za-z0-9]{6}" maxLength={6} value={pin} onChange={event => setPin(event.target.value.toUpperCase())} placeholder="A9B2X7" autoComplete="off"/></label>}
-      </fieldset>{error && <p className="error" role="alert">{error}</p>}<button className="primary full" disabled={busy}>{busy ? 'Connecting…' : mode === 'create' ? 'Create trip' : 'Join trip'}<Icon name="arrow" size={18}/></button>
-      <small className="session-note">Come back using this browser to access your trips.</small></form></section>}
-  </div>;
+import { googleLogin, prepareGoogleLogin } from '../google.js';
+export default function Onboarding({session,onSession,onJoinSuccess,trips=[]}){
+ const [pin,setPin]=useState(''),[tripName,setTripName]=useState(''),[create,setCreate]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{void prepareGoogleLogin().catch(()=>{});},[]);
+ async function login(){setBusy(true);setError('');try{const result=await googleLogin(Boolean(session));saveSession(result);onSession(result);}catch(e){setError(e.message);}finally{setBusy(false);}}
+ async function submit(event,mode){event.preventDefault();setBusy(true);setError('');try{const result=await api('/trips/'+mode,mode==='join'?{joinCode:pin}:{name:tripName});onJoinSuccess(result.trip._id);}catch(e){setError(e.message);}finally{setBusy(false);}}
+ if(!session)return <section className="minimal-login"><div className="login-logo" aria-label="Triproam"><span className="logo-mark"><Icon name="trip" size={34}/></span><h1>triproam<span>.</span></h1></div><button className="google-button" disabled={busy} onClick={login}>{busy?'Connecting…':'Continue with Google'}<Icon name="arrow"/></button>{error&&<p className="error" role="alert">{error}</p>}</section>;
+ return <section className="dashboard"><div className="dashboard-title"><span className="eyebrow">YOUR NEXT CHAPTER</span><h1>My trips</h1><p>Hey {session.user.displayName.split(' ')[0]}, where to next?</p></div>
+ <form className="join-strip" onSubmit={e=>submit(e,'join')}><label htmlFor="trip-pin">Joining friends? Enter your trip PIN</label><div><input id="trip-pin" required pattern="[A-Za-z0-9]{6}" minLength={6} maxLength={6} autoComplete="off" autoCapitalize="characters" spellCheck="false" value={pin} placeholder="A9B2X7" onChange={e=>setPin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''))}/><button className="primary" disabled={busy||pin.length!==6}>Join<Icon name="arrow" size={18}/></button></div></form>
+ {error&&<p className="error" role="alert">{error}</p>}
+ {!session.user.googleLinked&&<button className="secondary" disabled={busy} onClick={login}>Link Google to keep your trips</button>}
+ <div className="section-heading"><h2 className="section-title">Your adventures <span className="count-tag">{trips.length}</span></h2><button className="text-button" aria-expanded={create} onClick={()=>setCreate(!create)}><Icon name="plus" size={18}/>New trip</button></div>
+ {create&&<form className="create-trip-card" onSubmit={e=>submit(e,'create')}><label>Trip name<input autoFocus required maxLength={100} value={tripName} onChange={e=>setTripName(e.target.value)} placeholder="e.g. A weekend in Goa"/></label><button className="primary" disabled={busy}>Create trip<Icon name="arrow"/></button></form>}
+ <div className="adventure-list">{trips.map((trip,index)=><button className="adventure-card" key={trip._id} onClick={()=>onJoinSuccess(trip._id)}><span className={'adventure-art tone-'+index%3}><Icon name="trip" size={28}/></span><span><strong>{trip.name}</strong><small>{trip.status==='ended'?'Ended':'Active'} · {trip.participants?.length||1} travelers · {trip.groupLeads.includes(session.user._id)?'Group lead':'Member'}</small></span><Icon name="arrow"/></button>)}</div>
+ {!trips.length&&<div className="friendly-empty"><Icon name="trip" size={36}/><h2>Every trip starts here.</h2><p>Create your first trip, or join friends with their PIN.</p><button className="primary" onClick={()=>setCreate(true)}>Create a trip<Icon name="plus"/></button></div>}
+ </section>;
 }

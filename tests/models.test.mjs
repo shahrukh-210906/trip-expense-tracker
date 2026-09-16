@@ -50,15 +50,15 @@ test('members may contribute; only leads may spend or set opening balances', asy
   assert.doesNotThrow(() => assertCanRecord(trip, member, contribution, 'purse'));
   for (const kind of ['expense', 'opening']) {
     assert.throws(() => assertCanRecord(trip, member, { ...event(), kind }, 'purse'));
-    assert.doesNotThrow(() => assertCanRecord(trip, lead, { ...event(), recordedBy: lead, kind }, 'purse'));
+    assert.doesNotThrow(() => assertCanRecord(trip, lead, { ...event(), recordedBy: lead, kind, splitAmong: [member] }, 'purse'));
   }
 });
-test('members can read their own contributions but not other contributions or purse spending', () => {
+test('all members can read purse contributions and spending, but outsiders cannot', () => {
   const e = { ...event(), kind: 'contribution' };
   assert.equal(canReadPurseEntry(trip, member, e), true);
   assert.equal(canReadPurseEntry(trip, lead, e), true);
-  assert.equal(canReadPurseEntry(trip, member, { ...e, recordedBy: lead }), false);
-  assert.equal(canReadPurseEntry(trip, member, { ...e, kind: 'expense' }), false);
+  assert.equal(canReadPurseEntry(trip, member, { ...e, recordedBy: lead }), true);
+  assert.equal(canReadPurseEntry(trip, member, { ...e, kind: 'expense' }), true);
   assert.equal(canReadPurseEntry(trip, outsider, e), false);
 });
 test('self-only expenses are private even from a group lead', () => {

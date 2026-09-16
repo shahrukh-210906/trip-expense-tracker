@@ -3,19 +3,18 @@ import { useLiveTrip } from './useLiveTrip.js';
 import { useOfflineQueue } from './useOfflineQueue.js';
 import { cacheTrips, getCached } from './offlineStore.mjs';
 import SyncQueue from './components/SyncQueue.jsx';
+import InstallApp from './components/InstallApp.jsx';
 import Onboarding from './components/Onboarding.jsx';
-import Expenses from './components/Expenses.jsx';
+import { Overview, LiveFeed } from './components/TripViews.jsx';
+import { useNetwork } from './useNetwork.js';
 import Balances from './components/Balances.jsx';
 import Purse from './components/Purse.jsx';
+import EndTripDialog from './components/EndTripDialog.jsx';
 import ExpenseDialog from './components/ExpenseDialog.jsx';
 import { Icon } from './components/ui.jsx';
-import { api, getSession } from './api.js';
+import { api, getSession, clearSession } from './api.js';
 
-const pages = {
-  expenses: { title: 'Expenses', description: 'Keep track of what you paid and who it was for.' },
-  balances: { title: 'Your balances', description: 'See what you owe friends and what comes back to you.' },
-  purse: { title: 'Group purse', description: 'Manage the money set aside for shared trip expenses.' },
-};
+const pages = { overview: 'Overview', feed: 'Live feed', balances: 'Settlement', purse: 'Kitty history' };
 
 export default function App() {
   const [session, setSession] = useState(getSession);
@@ -23,14 +22,19 @@ export default function App() {
   const [trips, setTrips] = useState([]);
   const { data, error, setError, status, reload, cached } = useLiveTrip(session, tripId);
   const offline = useOfflineQueue(session);
+  const networkOffline = useNetwork();
   const queued = offline.rows.filter(row => row.entry.tripId === tripId);
   const selectedTrip = useRef(tripId);
   selectedTrip.current = tripId;
-  const [page, setPage] = useState('expenses');
+  const [page, setPage] = useState('overview');
   const [notice, setNotice] = useState('');
+  const [ending,setEnding]=useState(false);
   const [entryKind, setEntryKind] = useState(null), [refreshing, setRefreshing] = useState(false);
   const userId = session?.user._id, lead = data?.trip.groupLeads.includes(userId);
   const name = id => data?.members.find(member => member._id === id)?.displayName || 'Traveler';
+  function resetSession(){clearSession();setSession(null);setTripId(null);setTrips([]);setEntryKind(null);setEnding(false);setError('');}
+  useEffect(()=>{window.addEventListener('session-expired',resetSession);return()=>window.removeEventListener('session-expired',resetSession);},[]);
+  async function logout(){try{await api('/session',undefined,{method:'DELETE'});resetSession();}catch(error){setError(error.message);}}
 
   useEffect(() => {
     if (!session) return;
@@ -53,7 +57,7 @@ export default function App() {
 
   function selectTrip(id) {
     localStorage.setItem('active-trip', id);
-    setTripId(id); setPage('expenses'); setError(''); setNotice(''); setRefreshing(false);
+    setTripId(id); setPage('overview'); setError(''); setNotice(''); setRefreshing(false);
   }
   function backToTrips() {
     localStorage.removeItem('active-trip');
@@ -70,30 +74,26 @@ export default function App() {
   }
   function saved(message) { setEntryKind(null); setNotice(message); }
 
-  return <div className={'app ' + (!tripId ? 'trip-picker' : '')}>
-    <aside className="sidebar"><button className="brand" onClick={backToTrips} aria-label="Trip tracker home">trip<span>.</span></button>
-      {tripId && data && <><button className="trip-switcher" onClick={backToTrips}><span className="trip-mark"><Icon name="trip"/></span><span><small>CURRENT TRIP</small><strong>{data.trip.name}</strong></span><Icon name="down" size={16}/></button>
-        <nav aria-label="Trip navigation">{[['expenses', 'Expenses', 'Your payments & activity'], ['balances', 'Balances', 'Who owes whom'], ...(lead ? [['purse', 'Group purse', 'Shared trip funds']] : [])].map(([id, label, description]) =>
-          <button key={id} aria-current={page === id ? 'page' : undefined} onClick={() => { setPage(id); setNotice(''); }}><Icon name={id}/><span><strong>{label}</strong><small>{description}</small></span></button>)}</nav>
-        <div className="sidebar-note"><small>Expenses and balances update automatically.</small></div></>}
-      <div className="profile"><span className="avatar">{(session?.user.displayName || 'T').slice(0, 1)}</span><span><strong>{session?.user.displayName || 'Welcome, traveler'}</strong><small>{data && tripId ? lead ? 'Group lead' : 'Traveler' : 'Your travel companion'}</small></span></div>
-    </aside>
-    <main>
-      {tripId && data && <header className="trip-header"><span className="trip-breadcrumb"><Icon name="trip" size={16}/>{data.trip.name}</span><div className="header-tools"><details className="invite"><summary><Icon name="users" size={17}/>{data.members.length} {data.members.length === 1 ? 'traveler' : 'travelers'}<Icon name="down" size={14}/></summary><div className="invite-content"><strong>Invite a friend</strong><p>Ask them to choose Join trip and enter this code.</p><code>{data.trip.joinCode}</code><div className="member-list">{data.members.map(member => <div key={member._id}>{member.displayName}<small>{data.trip.groupLeads.includes(member._id) ? 'Group lead' : 'Traveler'}</small></div>)}</div></div></details>
-        <span className={'live-status ' + (cached ? 'offline' : status)} role="status"><span className="status-dot"/>{error ? 'Refresh needed' : cached ? 'Saved copy' : status === 'live' ? 'Live' : status === 'connecting' ? 'Connecting' : status === 'offline' ? 'Offline' : status === 'unavailable' ? 'Live unavailable' : 'Reconnecting'}</span>
-        <button className="icon-button" aria-label="Refresh trip" title="Refresh trip" disabled={refreshing} onClick={() => refresh()}><Icon name="refresh"/></button></div></header>}
-      {error && <div className="error" role="alert">{error}{tripId && <button className="text-button" disabled={refreshing} onClick={() => refresh()}>Try again</button>}</div>}
-      {offline.storageError && <div className="error" role="alert">{offline.storageError}</div>}
-      {!tripId ? <Onboarding session={session} onSession={setSession} onJoinSuccess={selectTrip} trips={trips}/> : !data ? <div className="loading-state"><Icon name="trip" size={32}/><h1>{error ? 'Let’s get you back to your trip' : 'Loading your trip…'}</h1><button className="secondary" onClick={backToTrips}>Back to my trips</button></div> : <>
-        <div className="page-heading"><div><span className="eyebrow">{page === 'purse' ? 'FOR GROUP LEADS' : 'YOUR TRIP, AT A GLANCE'}</span><h1>{pages[page].title}</h1><p>{pages[page].description}</p></div>
-          <button className="primary" disabled={refreshing} onClick={() => setEntryKind(page === 'purse' ? 'expense' : 'personal')}><Icon name="plus" size={18}/>{page === 'purse' ? 'Record purse spending' : 'Add expense'}</button></div>
-        {(queued.length > 0 || cached || status === 'offline') && <SyncQueue rows={queued} cached={cached} busy={offline.busy} retry={offline.retry} sync={() => { offline.sync(); void refresh(); }}/>}
-        {page === 'expenses' && <Expenses data={data} userId={userId} name={name}/>}
-        {page === 'balances' && <Balances data={data} userId={userId} name={name}/>}
-        {page === 'purse' && lead && <Purse data={data} name={name}/>}
+  const disconnected=networkOffline || status==='offline' || cached;
+  return <div className={'mobile-app '+(!session?'auth-shell':'')}>
+    {session&&<header className="mobile-header"><button className="icon-button" aria-label={tripId?'Back to my trips':'My trips'} onClick={backToTrips}><Icon name={tripId?'back':'trip'}/></button><strong>{tripId?(data?.trip.name||'Your trip'):'triproam.'}</strong>{disconnected&&tripId?<span className="offline-badge" role="status"><Icon name="cloud" size={17}/>Offline Mode</span>:tripId&&<span className="connection-label" role="status">{status==='live'?'Live': 'Connecting…'}</span>}{tripId?<button className="icon-button" aria-label="Refresh trip" disabled={refreshing} onClick={()=>refresh()}><Icon name="refresh"/></button>:<button className="text-button" onClick={logout}>Sign out</button>}</header>}
+    <main className="mobile-main">
+      {error&&<p className="error" role="alert">{error}</p>}{offline.storageError&&<p className="error" role="alert">{offline.storageError}</p>}
+      {!session||!tripId?<><Onboarding session={session} onSession={setSession} onJoinSuccess={selectTrip} trips={trips}/>{session&&<InstallApp/>}</>:!data?<div className="loading-state"><Icon name="trip" size={32}/><h1>{error?'Trip unavailable':'Loading your trip…'}</h1><button className="secondary" onClick={backToTrips}>Back to my trips</button></div>:<>
+        <div className="mobile-page-heading"><span className="eyebrow">{page==='overview'?'TRIP OVERVIEW':'TRIP DETAILS'}</span><h1>{pages[page]}</h1></div>
+        {(queued.length>0||disconnected)&&<SyncQueue rows={queued} cached={cached} busy={offline.busy} retry={offline.retry} sync={()=>{offline.sync();void refresh();}}/>}
+        {data.trip.status==='ended'&&<div className="ended-banner"><Icon name="check"/>Trip ended · Final balances below</div>}
+        {page==='overview'&&<Overview data={data} userId={userId} name={name} lead={lead} manage={()=>setEntryKind('expense')} history={()=>setPage('purse')} feed={()=>setPage('feed')}/>}
+        {page==='feed'&&<LiveFeed data={data} rows={queued} name={name} userId={userId}/>}
+        {page==='balances'&&<Balances data={data} userId={userId} name={name}/>}
+        {page==='purse'&&<><button className="text-button" onClick={()=>setPage('overview')}><Icon name="back"/>Overview</button><Purse data={data} name={name}/></>}
+        {page==='overview'&&lead&&data.trip.status!=='ended'&&<button className="end-trip-link" onClick={()=>setEnding(true)}>End trip<Icon name="arrow" size={16}/></button>}
+        {page==='overview'&&<details className="trip-people"><summary><Icon name="users"/>{data.members.length} travelers · Invite friends<Icon name="down"/></summary><p>Share this trip PIN</p><code>{data.trip.joinCode}</code>{data.members.map(member=><div key={member._id}>{member.displayName}<small>{data.trip.groupLeads.includes(member._id)?'Group lead':'Member'}</small></div>)}</details>}
       </>}
     </main>
-    {notice && <div className="toast" role="status"><Icon name="check" size={18}/>{notice}<button className="icon-button" aria-label="Dismiss notification" onClick={() => setNotice('')}><Icon name="close" size={16}/></button></div>}
-    {entryKind && data && <ExpenseDialog initialKind={entryKind} data={data} user={session.user} enqueue={offline.enqueue} onClose={() => setEntryKind(null)} onSaved={saved}/>}
+    {session&&tripId&&data&&<>{data.trip.status!=='ended'&&<button className="expense-fab" onClick={()=>setEntryKind('personal')}><Icon name="plus"/>Add expense</button>}<nav className="bottom-nav" aria-label="Trip navigation">{[['overview','Overview','trip'],['feed','Live Feed','expenses'],['balances','Settlement','balances']].map(([id,label,icon])=><button key={id} aria-current={(page===id||(id==='overview'&&page==='purse'))?'page':undefined} onClick={()=>{setPage(id);window.scrollTo({top:0,behavior:'instant'});}}><Icon name={icon}/><span>{label}</span></button>)}</nav></>}
+    {notice&&<div className="toast" role="status"><Icon name="check"/>{notice}<button className="icon-button" aria-label="Dismiss notification" onClick={()=>setNotice('')}><Icon name="close"/></button></div>}
+    {ending&&data&&<EndTripDialog trip={data.trip} pending={queued.length} onClose={()=>setEnding(false)} onEnded={()=>{setEnding(false);setPage('balances');void refresh('Trip ended. Final balances are ready.');}}/>}
+    {entryKind&&data&&data.trip.status!=='ended'&&<ExpenseDialog initialKind={entryKind} data={data} user={session.user} enqueue={offline.enqueue} onClose={()=>setEntryKind(null)} onSaved={saved}/>}
   </div>;
 }

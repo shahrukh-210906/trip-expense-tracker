@@ -1,5 +1,25 @@
 # Trip Expense Tracker
 
+## Current release: mobile redesign, Kitty settlement, and End trip
+
+This section supersedes the historical milestone notes below.
+
+- Mobile navigation: Overview, Live Feed, Settlement; fixed Add expense action; minimal Google sign-in; dashboard with direct PIN entry and active/ended trip cards.
+- Revised navy/blue interface with readable cards, phone-safe spacing, bottom-sheet entry, optional numeric keypad, and explicit sync indicators. Browser offline events and service-worker network failures show an Offline Mode badge.
+- Kitty expenses support a selected list of participants. Existing entries without a participant list are treated as shared across the trip; new entries persist the selection. Members can view Kitty history and contribute; only leads record Kitty spending.
+- Kitty balances can go negative: the first group lead is the custodian who advances the shortfall. Each member's Kitty credit equals contributions minus their allocated spending. A positive credit is refunded by the lead; a negative credit is paid to the lead. Because contributions and beneficiaries can differ, a trip may have both refunds and amounts due. Personal balances remain a separate ledger; Overview net balance includes both.
+- Leads can end a trip after confirmation. It locks new expenses, contributions, and joins while keeping history and final settlement available. Trip state and expense writes serialize on the trip document, preventing expenses after closure. Retries of already saved entries remain accepted. Everyone should sync first; the lead cannot detect another device's unsynced queue.
+- Checks: 32 local tests and isolated MongoDB integration tests passed, including selected Kitty beneficiaries, signed balances, refunds, rejected member spending, end-trip permissions, and locked writes. Browser review used isolated sample data, not real-account writes; checked phone and landscape layouts, expense entry, member controls, and end-trip state.
+
+
+## Google login — September 16, 2026
+
+Open **http://localhost:5000** and choose **Continue with Google**. Google is the only new-account/login method. Existing browser travelers can choose **Link Google account** on the trips screen to preserve their trips and expenses. Link before signing out of a legacy traveler. Use the same Google account to return on another device; signing in rotates the app session, so the previous device must sign in again.
+
+Firebase Admin verifies the Google ID token (including revocation) before issuing the existing 30-day app session. Admin credentials remain in root `.env`; `/api/auth/config` exposes only public web settings. Google must be enabled in Firebase Authentication and the app hostname must be an authorized domain. Both `localhost` and `127.0.0.1` are authorized. Existing travelers should link at their original browser address because browser storage is origin-specific. Sign out revokes the app session. Existing offline queues remain scoped to their traveler.
+
+Verified: Firebase Admin connectivity, Google provider enabled, 28 local tests, database integration including identity reuse/linking, and production build. Interactive Google consent must be completed by the account owner. The older progress notes below describe earlier milestones.
+
 A React + Express + MongoDB app for personal payments, direct debts between travelers, and a separate group purse. The original design prototype remains in `prototype/`.
 
 ## Task status — September 16, 2026
@@ -114,3 +134,14 @@ Next are account recovery and session expiry/revocation, followed by invitation 
 - Browser verification covered the redesigned workspace, expandable payment details, saving and finding a private ₹0.01 **UI review check (demo)** expense, and the purse layout at a 390px phone breakpoint. The production frontend build passes.
 
 [GitHub repository](https://github.com/shahrukh-210906/trip-expense-tracker)
+
+## PWA and session fixes — September 16, 2026
+
+Added an installable manifest, 192/512px icons, maskable and Apple touch icons, theme metadata, and installation controls with browser-specific fallback guidance. The service worker caches the manifest and icons with the app shell. Installation requires browser support and HTTPS or a loopback address; public mobile access still needs deployment. Native installation was not performed in the embedded browser.
+
+Preloaded Firebase sign-in setup and improved popup failure guidance. Google account consent remains user-driven; a cancelled popup does not establish successful login. Expired/revoked sessions now fail realtime authentication as well as HTTP authentication; logout and Google session rotation disconnect existing live subscriptions. Late requests from an older session cannot clear a newer login.
+
+Validation: 29 local tests, isolated MongoDB integration suite, production build, manifest/icon dimensions, and browser checks of the signed-out screen and installation instructions passed.
+
+## Group purse visibility update
+All trip members can now view the purse balance, complete money-in/money-out history, and live updates. The purse page is read-only for non-leads; only leads can record purse spending or opening balances. Members retain the existing ability to record their own contributions through Add expense. Outsiders have no access. Verified with local tests, database integration checks (including rejected member spending), and production build.

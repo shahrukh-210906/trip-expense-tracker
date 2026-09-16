@@ -1,23 +1,13 @@
 import { useState } from 'react';
-import { EmptyState, Icon, money } from './ui.jsx';
-
-export default function Balances({ data, userId, name }) {
-  const [everyone, setEveryone] = useState(false);
-  const owed = data.transactions.filter(t => t.to === userId);
-  const owing = data.transactions.filter(t => t.from === userId);
-  const total = rows => money(rows.reduce((sum, t) => sum + t.amountPaise, 0));
-  return <>
-    <div className="balance-columns">
-      <section className="balance-panel receive"><span className="balance-direction"><Icon name="arrow"/>COMING BACK TO YOU</span><h2>{total(owed)}</h2><p>Friends owe you</p>
-        {owed.length ? owed.map(t => <div className="person-balance" key={t.from}><span className="avatar">{name(t.from).slice(0, 1)}</span><div><strong>{name(t.from)}</strong><small>owes you</small></div><strong>{money(t.amountPaise)}</strong></div>) : <p className="balance-empty">Nobody owes you right now.</p>}
-      </section>
-      <section className="balance-panel owe"><span className="balance-direction"><Icon name="arrow"/>TO PAY BACK</span><h2>{total(owing)}</h2><p>You owe friends</p>
-        {owing.length ? owing.map(t => <div className="person-balance" key={t.to}><span className="avatar">{name(t.to).slice(0, 1)}</span><div><strong>{name(t.to)}</strong><small>you owe</small></div><strong>{money(t.amountPaise)}</strong></div>) : <p className="balance-empty">You don’t owe anyone right now.</p>}
-      </section>
-    </div>
-    <p className="explanation"><Icon name="balances" size={18}/>Payments between each pair are offset. Group purse money stays separate.</p>
-    <section className="group-balances"><button className="disclosure" aria-expanded={everyone} onClick={() => setEveryone(!everyone)}>View balances for the whole trip <Icon name="down"/></button>
-      {everyone && (data.transactions.length ? data.transactions.map(t => <div className="whole-trip-balance" key={t.from + t.to}><span>{name(t.from)} <span className="muted">owes</span> {name(t.to)}</span><strong>{money(t.amountPaise)}</strong></div>) : <EmptyState icon="check" title="Everyone is square">No outstanding debts between travelers.</EmptyState>)}
-    </section>
-  </>;
+import { Icon, money } from './ui.jsx';
+export default function Balances({data,userId,name}){
+ const [everyone,setEveryone]=useState(false),[ledger,setLedger]=useState(data.trip.status==='ended'&&data.kittySettlement?'kitty':'personal');
+ const transactions=ledger==='kitty'?(data.kittySettlement?.transactions||[]):data.transactions;
+ const owed=transactions.filter(t=>t.to===userId).reduce((s,t)=>s+t.amountPaise,0);
+ const owing=transactions.filter(t=>t.from===userId).reduce((s,t)=>s+t.amountPaise,0);
+ return <>{!data.kittySettlement&&<p className="ledger-note">Reconnect to load Kitty settlement for this saved trip.</p>}<div className="settlement-tabs" role="group" aria-label="Settlement ledger"><button aria-pressed={ledger==='personal'} onClick={()=>setLedger('personal')}>Personal Pocket</button><button disabled={!data.kittySettlement} aria-pressed={ledger==='kitty'} onClick={()=>setLedger('kitty')}>Group Kitty</button></div><p className="page-description">{ledger==='kitty'?(data.kittySettlement?.leadId===userId?'As group lead, collect amounts owed and return unused contributions.':'Your contributions minus your share of spending. Settle with '+name(data.kittySettlement?.leadId)+'.'):'Who owes whom for personal payments.'}</p><div className="settlement-totals"><div><span>You are owed</span><strong className="positive">{money(owed)}</strong></div><div><span>You owe</span><strong className="negative">{money(owing)}</strong></div></div><section className="settlement-list" aria-label="Balances with travelers">{data.members.filter(m=>m._id!==userId).map(member=>{
+ const incoming=transactions.find(t=>t.from===member._id&&t.to===userId)?.amountPaise||0;
+ const outgoing=transactions.find(t=>t.to===member._id&&t.from===userId)?.amountPaise||0;
+ return <div className="settlement-row" key={member._id}><span className="avatar">{member.displayName.slice(0,1)}</span><strong>{member.displayName}</strong><span className={'balance-badge '+(incoming?'receive':outgoing?'owe':'settled')}>{incoming?'Owes You '+money(incoming):outgoing?'You Owe '+money(outgoing):'Settled up'}</span></div>;
+ })}{data.members.length===1&&<div className="friendly-empty"><Icon name="users"/><h3>Better with company</h3><p>Invite a friend from Overview to start splitting expenses.</p></div>}</section><p className="ledger-note"><Icon name="lock" size={16}/>{ledger==='kitty'?(data.kittySettlement?.leadId===userId?'Refund members in credit. Collect from members who owe.':'Positive credit: the lead refunds you. Negative credit: you pay the lead.'):'Personal balances stay separate from Kitty settlement.'}</p><button className="text-button" aria-expanded={everyone} onClick={()=>setEveryone(!everyone)}>Whole-trip balances<Icon name="down"/></button>{everyone&&<section className="settlement-list">{transactions.length?transactions.map(t=><div className="whole-trip-balance" key={t.from+t.to}><span>{name(t.from)} owes {name(t.to)}</span><strong>{money(t.amountPaise)}</strong></div>):<p className="ledger-note">Everyone is settled up.</p>}</section>}</>;
 }

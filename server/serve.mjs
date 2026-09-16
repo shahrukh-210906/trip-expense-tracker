@@ -13,7 +13,7 @@ try{
   app.get('/{*path}',(req,res)=>res.sendFile(resolve('client/dist/index.html')));
   const server=createServer(app),live=attachRealtime(server,models);
   app.set('live',live);
-  server.listen(process.env.PORT||5000,'127.0.0.1',()=>console.log('Trip app ready on http://127.0.0.1:'+(process.env.PORT||5000)));
+  server.listen(process.env.PORT||5000,'127.0.0.1',()=>console.log('Trip app ready on http://localhost:'+(process.env.PORT||5000)));
   const stop=()=>live.io.close(async()=>{await disconnectDatabase();process.exit(0);});
   process.on('SIGINT',stop);process.on('SIGTERM',stop);
 }catch{
