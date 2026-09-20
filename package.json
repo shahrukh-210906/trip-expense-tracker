@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "start": "node server/serve.mjs",
     "dev": "node server/serve.mjs",
     "dev:prototype": "node scripts/serve.mjs",
     "dev:client": "npm --prefix client run dev",

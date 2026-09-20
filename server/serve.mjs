@@ -13,7 +13,9 @@ try{
   app.get('/{*path}',(req,res)=>res.sendFile(resolve('client/dist/index.html')));
   const server=createServer(app),live=attachRealtime(server,models);
   app.set('live',live);
-  server.listen(process.env.PORT||5000,'127.0.0.1',()=>console.log('Trip app ready on http://localhost:'+(process.env.PORT||5000)));
+  const port=process.env.PORT||5000;
+  const host=process.env.HOST||(process.env.NODE_ENV==='production'?'0.0.0.0':'127.0.0.1');
+  server.listen(port,host,()=>console.log('Trip app listening on '+host+':'+port));
   const stop=()=>live.io.close(async()=>{await disconnectDatabase();process.exit(0);});
   process.on('SIGINT',stop);process.on('SIGTERM',stop);
 }catch{
