@@ -10,9 +10,16 @@ test('remainders stay in integer paise and selection order',()=>{
   assert.deepEqual(calculateSettlement([expense('a',100,['b','c','a'])],['a','b','c']),
     [{from:'b',to:'a',amountPaise:34},{from:'c',to:'a',amountPaise:33}]);
 });
-test('does not redirect debt through unrelated travelers',()=>{
+test('redirects chained debts into a direct payment',()=>{
   assert.deepEqual(calculateSettlement([expense('a',100,['b']),expense('b',100,['c'])],['a','b','c']),
-    [{from:'b',to:'a',amountPaise:100},{from:'c',to:'b',amountPaise:100}]);
+    [{from:'c',to:'a',amountPaise:100}]);
+});
+test('unequal chains preserve the remaining debt',()=>{
+  assert.deepEqual(calculateSettlement([expense('b',150,['a']),expense('c',100,['b'])],['a','b','c']),
+    [{from:'a',to:'b',amountPaise:50},{from:'a',to:'c',amountPaise:100}]);
+});
+test('circular debts cancel without any payments',()=>{
+  assert.deepEqual(calculateSettlement([expense('b',100,['a']),expense('c',100,['b']),expense('a',100,['c'])],['a','b','c']),[]);
 });
 test('rejects malformed expenses instead of corrupting balances',()=>{
   for(const e of [expense('a',1,[]),expense('a',1,['b','b']),expense('a',0.5,['b']),expense('x',100,['b'])])

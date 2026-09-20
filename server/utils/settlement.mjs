@@ -1,4 +1,4 @@
-// All amounts are integer paise. Offset only direct debts between each pair.
+// All amounts are integer paise. Settle net balances directly, removing intermediaries.
 export function calculateSettlement(expenses, participants) {
   const members = new Set(participants.map(String)), pairs = new Map();
   for (const expense of expenses) {
@@ -15,7 +15,26 @@ export function calculateSettlement(expenses, participants) {
       pairs.set(key, { a,b,amountPaise:next });
     });
   }
-  return [...pairs.values()].filter(p=>p.amountPaise!==0).map(p=>({
+  const direct = [...pairs.values()].filter(p=>p.amountPaise!==0).map(p=>({
     from:p.amountPaise>0?p.a:p.b, to:p.amountPaise>0?p.b:p.a, amountPaise:Math.abs(p.amountPaise)
   }));
+  const balances = new Map([...members].map(id=>[id,0]));
+  for (const t of direct) {
+    balances.set(t.from,balances.get(t.from)-t.amountPaise);
+    balances.set(t.to,balances.get(t.to)+t.amountPaise);
+    if (!Number.isSafeInteger(balances.get(t.from)) || !Number.isSafeInteger(balances.get(t.to)))
+      throw new Error('Settlement exceeds supported amount.');
+  }
+  const debtors=[...balances].filter(([,n])=>n<0).map(([id,n])=>({id,amount:-n}));
+  const creditors=[...balances].filter(([,n])=>n>0).map(([id,n])=>({id,amount:n}));
+  const result=[];
+  let i=0,j=0;
+  while(i<debtors.length && j<creditors.length){
+    const amountPaise=Math.min(debtors[i].amount,creditors[j].amount);
+    result.push({from:debtors[i].id,to:creditors[j].id,amountPaise});
+    debtors[i].amount-=amountPaise; creditors[j].amount-=amountPaise;
+    if(!debtors[i].amount)i++;
+    if(!creditors[j].amount)j++;
+  }
+  return result;
 }
