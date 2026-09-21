@@ -3,6 +3,8 @@ import { authenticate,newToken,newRecoveryCode,tokenHash } from './auth.mjs';
 import { tripRoutes } from './routes/tripRoutes.mjs';
 import { expenseRoutes } from './routes/expenseRoutes.mjs';
 import { publicFirebaseConfig, verifyGoogleToken } from './firebase.mjs';
+import { paymentRoutes } from './payments.mjs';
+import { notificationRoutes } from './notifications.mjs';
 export function createApp(models,connection,{allowLegacyLogin=false,verifyToken=verifyGoogleToken}={}){
   const app=express();
   app.disable('x-powered-by');
@@ -54,13 +56,15 @@ export function createApp(models,connection,{allowLegacyLogin=false,verifyToken=
     } catch(error){ next(error); }
   });
   app.use('/api',authenticate(models.User));
+  app.use('/api/payments',paymentRoutes(models,connection));
+  app.use('/api/notifications',notificationRoutes(models));
   app.get('/api/session',(req,res)=>res.json({user:req.user}));
   app.post('/api/session/recovery-code',async(req,res,next)=>{
     try { const code=newRecoveryCode(); await models.User.updateOne({_id:req.user._id},{$set:{recoveryCodeHash:tokenHash(code)}}); res.json({code}); }
     catch(error){ next(error); }
   });
   app.delete('/api/session',async(req,res,next)=>{
-    try { await models.User.updateOne({_id:req.user._id},{$set:{tokenRevokedAt:new Date()}}); req.app.get('live')?.disconnectUser(req.user._id); res.status(204).end(); }
+    try { await models.User.updateOne({_id:req.user._id},{$set:{tokenRevokedAt:new Date()}}); await models.PushSubscription.deleteMany({userId:req.user._id}); req.app.get('live')?.disconnectUser(req.user._id); res.status(204).end(); }
     catch(error){ next(error); }
   });
   app.use('/api/trips',tripRoutes(models));

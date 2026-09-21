@@ -26,6 +26,7 @@ export const userSchema = new Schema({
   tokenCreatedAt: { type: Date },
   tokenRevokedAt: { type: Date },
   recoveryCodeHash: { type: String, select: false },
+  upiId: { type: String, select: false, maxlength: 100, default: '' },
 }, options);
 userSchema.index({ tokenHash: 1 }, { unique: true, sparse: true });
 userSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
@@ -84,5 +85,27 @@ export function createModels(connection = mongoose) {
     Trip: connection.models.Trip || connection.model('Trip', tripSchema),
     PersonalExpense: connection.models.PersonalExpense || connection.model('PersonalExpense', personalExpenseSchema),
     PurseEntry: connection.models.PurseEntry || connection.model('PurseEntry', purseEntrySchema),
+    SettlementPayment: connection.models.SettlementPayment || connection.model('SettlementPayment', settlementPaymentSchema),
+    Notification: connection.models.Notification || connection.model('Notification', notificationSchema),
+    PushSubscription: connection.models.PushSubscription || connection.model('PushSubscription', pushSchema),
   };
 }
+
+export const settlementPaymentSchema = new Schema({
+  tripId: {...objectId(), ref:'Trip'}, from:objectId(), to:objectId(),
+  ledger:{type:String,required:true,enum:['personal','kitty']}, amountPaise:money(),
+  clientId:{type:String,required:true,match:/^[0-9a-f-]{36}$/i},
+  state:{type:String,enum:['pending','accepted','rejected','cancelled'],default:'pending'}, resolvedAt:Date,
+},options);
+settlementPaymentSchema.index({tripId:1,from:1,clientId:1},{unique:true});
+settlementPaymentSchema.index({tripId:1,from:1,to:1,ledger:1},{unique:true,partialFilterExpression:{state:'pending'}});
+export const notificationSchema = new Schema({
+  userId:objectId(),actorId:objectId(),tripId:{...objectId(),ref:'Trip'},
+  kind:{type:String,enum:['request','accepted','rejected','reminder'],required:true},
+  ledger:{type:String,enum:['personal','kitty'],required:true},amountPaise:money(),
+  paymentId:{type:Schema.Types.ObjectId,ref:'SettlementPayment'},readAt:Date,
+},options);
+notificationSchema.index({userId:1,createdAt:-1});
+notificationSchema.index({tripId:1,actorId:1,userId:1,kind:1,createdAt:-1});
+const pushSchema=new Schema({userId:objectId(),endpoint:{type:String,required:true},keys:{auth:String,p256dh:String}},options);
+pushSchema.index({endpoint:1},{unique:true});

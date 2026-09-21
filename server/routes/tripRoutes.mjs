@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { isMember,isLead,canReadPersonalExpense,canReadPurseEntry } from '../access.mjs';
 import { calculateSettlement } from '../utils/settlement.mjs';
 import { calculateKittySettlement } from '../utils/kittySettlement.mjs';
+import { paymentBalances,loadPaymentBalances } from '../utils/paymentBalances.mjs';
 export function tripRoutes(models) {
   const {Trip,User,PersonalExpense,PurseEntry}=models, router=express.Router();
   const publicTrip=(trip,userId)=>{
@@ -49,10 +50,12 @@ export function tripRoutes(models) {
       PersonalExpense.find({tripId:trip._id}).sort({clientCreatedAt:-1}),
       PurseEntry.find({tripId:trip._id}).sort({clientCreatedAt:-1})
     ]);
+    const payments=await models.SettlementPayment.find({tripId:trip._id});
     res.json({trip:publicTrip(trip,req.user._id),members,
       expenses:expenses.filter(e=>canReadPersonalExpense(trip,req.user._id,e)),
       purseEntries:purseEntries.filter(e=>canReadPurseEntry(trip,req.user._id,e)),
-      transactions:calculateSettlement(expenses,trip.participants),kittySettlement:calculateKittySettlement(purseEntries,trip)});
+      ...paymentBalances(expenses,purseEntries,trip,payments),
+      payments:payments.filter(p=>[String(p.from),String(p.to)].includes(String(req.user._id)))});
   });
   router.post('/:tripId/end',async(req,res)=>{
     if(!isLead(req.trip,req.user._id))return res.status(403).json({error:'Only a group lead can end this trip.'});
@@ -61,9 +64,8 @@ export function tripRoutes(models) {
     res.json({trip:publicTrip(trip||req.trip,req.user._id)});
   });
   router.get('/:tripId/settlement',async(req,res)=>{
-    const expenses=await PersonalExpense.find({tripId:req.trip._id});
-    const purseEntries=await PurseEntry.find({tripId:req.trip._id});
-    res.json({transactions:calculateSettlement(expenses,req.trip.participants),kittySettlement:calculateKittySettlement(purseEntries,req.trip)});
+    const {transactions,kittySettlement}=await loadPaymentBalances(models,req.trip);
+    res.json({transactions,kittySettlement});
   });
   return router;
 }

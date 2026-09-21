@@ -8,7 +8,7 @@
     "dev:prototype": "node scripts/serve.mjs",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build && node scripts/build-offline.mjs",
-    "test:integration": "node --test tests/api.integration.mjs",
+    "test:integration": "node --test tests/*.integration.mjs",
     "check": "node scripts/check.mjs",
     "test": "node --test tests/*.test.mjs",
     "db:check": "node scripts/database.mjs",
@@ -20,7 +20,8 @@
     "express": "^5.2.1",
     "firebase-admin": "^14.4.0",
     "mongoose": "^9.10.1",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "web-push": "^3.6.7"
   },
   "engines": {
     "node": ">=22.15.0"

@@ -5,6 +5,8 @@ import { cacheTrips, getCached } from './offlineStore.mjs';
 import SyncQueue from './components/SyncQueue.jsx';
 import InstallApp from './components/InstallApp.jsx';
 import Tutorial from './components/Tutorial.jsx';
+import {PaymentProfile} from './components/PaymentTools.jsx';
+import NotificationInbox from './components/NotificationInbox.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import { Overview, LiveFeed } from './components/TripViews.jsx';
 import { useNetwork } from './useNetwork.js';
@@ -86,11 +88,12 @@ export default function App() {
         {data.trip.status==='ended'&&<div className="ended-banner"><Icon name="check"/>Trip ended · Final balances below</div>}
         {page==='overview'&&<Overview data={data} userId={userId} name={name} lead={lead} manage={()=>setEntryKind('expense')} history={()=>setPage('purse')} feed={()=>setPage('feed')}/>}
         {page==='feed'&&<LiveFeed data={data} rows={queued} name={name} userId={userId}/>}
-        {page==='balances'&&<Balances data={data} userId={userId} name={name}/>}
+        {page==='balances'&&<Balances data={data} userId={userId} name={name} reload={reload}/>}
         {page==='purse'&&<><button className="text-button" onClick={()=>setPage('overview')}><Icon name="back"/>Overview</button><Purse data={data} name={name}/></>}
         {page==='overview'&&lead&&data.trip.status!=='ended'&&<button className="end-trip-link" onClick={()=>setEnding(true)}>End trip<Icon name="arrow" size={16}/></button>}
         {page==='overview'&&<details className="trip-people"><summary><Icon name="users"/>{data.members.length} travelers · Invite friends<Icon name="down"/></summary><p>Share this trip PIN</p><code>{data.trip.joinCode}</code>{data.members.map(member=><div key={member._id}>{member.displayName}<small>{data.trip.groupLeads.includes(member._id)?'Group lead':'Member'}</small></div>)}</details>}
       </>}
+      {session&&<><NotificationInbox key={session.user._id} session={session} onOpenTrip={id=>{selectTrip(id);setPage('balances');}}/><PaymentProfile key={session.user._id}/></>}
       <Tutorial/>
     </main>
     {session&&tripId&&data&&<>{data.trip.status!=='ended'&&<button className="expense-fab" onClick={()=>setEntryKind('personal')}><Icon name="plus"/>Add expense</button>}<nav className="bottom-nav" aria-label="Trip navigation">{[['overview','Overview','trip'],['feed','Live Feed','expenses'],['balances','Settlement','balances']].map(([id,label,icon])=><button key={id} aria-current={(page===id||(id==='overview'&&page==='purse'))?'page':undefined} onClick={()=>{setPage(id);window.scrollTo({top:0,behavior:'instant'});}}><Icon name={icon}/><span>{label}</span></button>)}</nav></>}

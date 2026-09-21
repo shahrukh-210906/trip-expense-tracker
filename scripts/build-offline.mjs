@@ -17,6 +17,20 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('trip-shell-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
+self.addEventListener('push', event => {
+  event.waitUntil(self.registration.showNotification('TripRoam', {
+    body: 'You have a new settlement update. Open TripRoam to review it.',
+    icon: '/app-192.png', badge: '/app-192.png', tag: 'triproam-settlement'
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(async windows => {
+    const client = windows.find(window => new URL(window.url).origin === self.location.origin);
+    if (client) return client.focus();
+    return self.clients.openWindow('/');
+  }));
+});
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if(url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
