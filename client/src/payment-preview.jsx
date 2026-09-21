@@ -1,3 +1,4 @@
+import Settings from './components/Settings.jsx';
 // Development-only interactive payment preview. All API responses are in-memory fixtures.
 import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -21,7 +22,9 @@ if(import.meta.env.DEV){
  };
  function Preview(){const [person,setPerson]=useState('sam'),[version,setVersion]=useState(0);const remaining=120000-payments.filter(p=>p.state==='accepted'&&p.ledger==='personal').reduce((n,p)=>n+p.amountPaise,0);
   const data={trip:{_id:'demo',name:'Demo weekend',participants:['alex','sam'],groupLeads:['alex']},members,transactions:remaining?[{from:'sam',to:'alex',amountPaise:remaining}]:[],kittySettlement:{leadId:'alex',transactions:[]},payments:[...payments]};
-  return <div className="mobile-app"><header className="mobile-header"><strong>Payment preview · demo only</strong></header><main className="mobile-main"><div className="payment-buttons">{members.map(m=><button className="secondary" key={m._id} onClick={()=>{user=m._id;setPerson(user);}}>{m.displayName}{m._id===person?' (current)':''}</button>)}</div><h1>Settlement</h1><Balances data={data} userId={person} name={id=>members.find(m=>m._id===id)?.displayName} reload={async()=>setVersion(version+1)}/><PaymentProfile key={person}/><NotificationInbox key={person+version} session={{token:'demo'}} onOpenTrip={()=>{}}/></main></div>;
+  return <div className="mobile-app"><header className="mobile-header"><strong>Payment preview · demo only</strong></header><main className="mobile-main"><div className="payment-buttons">{members.map(m=><button className="secondary" key={m._id} onClick={()=>{user=m._id;setPerson(user);}}>{m.displayName}{m._id===person?' (current)':''}</button>)}</div><div className="mobile-page-heading"><h1>{location.search.includes("settings")?"Settings & sync":"Settlement"}</h1></div>{location.search.includes("settings")?<Settings session={{token:"demo",user:members.find(m=>m._id===person)}} status="live" disconnected={false} queued={[]} busy={false} onSync={()=>{}} onOpenTrip={()=>{}} onLogout={()=>{}}/>:<><Balances data={data} userId={person} name={id=>members.find(m=>m._id===id)?.displayName} reload={async()=>setVersion(version+1)}/><PaymentProfile key={person}/><NotificationInbox key={person+version} session={{token:'demo'}} onOpenTrip={()=>{}}/></>}</main></div>;
  }
  createRoot(document.getElementById('root')).render(<Preview/>);
 }
+
+import './reference.css';

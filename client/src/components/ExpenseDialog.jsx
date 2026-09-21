@@ -35,7 +35,7 @@ export default function ExpenseDialog({ initialKind, data, user, onClose, onSave
     } catch { setError('Could not save this payment on your device. Keep the form open and check browser storage before trying again.'); setSaving(false); }
   }
   return <dialog ref={dialog} className="expense-dialog" aria-labelledby="entry-title" onCancel={event => { event.preventDefault(); if (!saving) onClose(); }}>
-    <form onSubmit={save}><div className="dialog-heading"><div><span className="eyebrow">RECORD A PAYMENT</span><h2 id="entry-title">{kind === 'expense' ? 'Kitty spending' : 'Add expense'}</h2></div>
+    <form onSubmit={save}><div className="sheet-handle" aria-hidden="true"/><div className="dialog-heading"><div><span className="eyebrow">TRIP EXPENSE</span><h2 id="entry-title">{kind === 'expense' ? 'Kitty spending' : kind === 'contribution' ? 'Add contribution' : 'Add new expense'}</h2></div>
       <button type="button" className="icon-button" aria-label="Close expense form" disabled={saving} onClick={onClose}><Icon name="close"/></button></div>
       <div className="dialog-body"><fieldset disabled={saving} className="form-fields"><legend className="sr-only">Payment details</legend>
         <div className="pocket-toggle" role="group" aria-label="Payment source"><button type="button" aria-pressed={kind==='personal'} onClick={()=>setKind('personal')}><Icon name="expenses"/>Personal Pocket</button><button type="button" aria-pressed={kind!=='personal'} onClick={()=>setKind(lead?'expense':'contribution')}><Icon name="purse"/>Kitty</button></div>

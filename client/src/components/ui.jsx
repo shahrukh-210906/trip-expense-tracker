@@ -7,6 +7,8 @@ export function Icon({ name, size = 20, ...props }) {
     expenses: <><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></>,
     balances: <><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4"/></>,
     purse: <><path d="M19 8V5a2 2 0 0 0-2-2H6a3 3 0 0 0 0 6h14v11H6a3 3 0 0 1-3-3V6"/><path d="M20 12h-5v5h5"/></>,
+    'cloud-sync': <><path d="M6 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 17 8a5 5 0 0 1 1 10"/><path d="m9 15 3-3 3 3m-3-3v9"/></>,
+    settings: <><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="currentColor"/><circle cx="15" cy="17" r="3" fill="currentColor"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,
     arrow: <path d="M5 12h14m-5-5 5 5-5 5"/>,
     back: <path d="M19 12H5m5-5-5 5 5 5"/>,
