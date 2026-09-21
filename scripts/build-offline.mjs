@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 const dist = resolve('client/dist');
 const paths = ['/index.html', '/manifest.webmanifest', '/app-192.png', '/app-512.png', '/app-maskable.png', '/apple-touch-icon.png', ...readdirSync(resolve(dist, 'assets')).filter(name => /\.(js|css)$/.test(name)).map(name => '/assets/' + name)];
+paths.push(...readdirSync(resolve(dist, 'tutorial')).filter(name => /\.(png|svg)$/.test(name)).map(name => '/tutorial/' + name));
 const hash = createHash('sha256');
 for (const path of paths) hash.update(readFileSync(resolve(dist, '.' + path)));
 const version = hash.digest('hex').slice(0, 16);

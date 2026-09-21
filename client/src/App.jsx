@@ -4,6 +4,7 @@ import { useOfflineQueue } from './useOfflineQueue.js';
 import { cacheTrips, getCached } from './offlineStore.mjs';
 import SyncQueue from './components/SyncQueue.jsx';
 import InstallApp from './components/InstallApp.jsx';
+import Tutorial from './components/Tutorial.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import { Overview, LiveFeed } from './components/TripViews.jsx';
 import { useNetwork } from './useNetwork.js';
@@ -90,6 +91,7 @@ export default function App() {
         {page==='overview'&&lead&&data.trip.status!=='ended'&&<button className="end-trip-link" onClick={()=>setEnding(true)}>End trip<Icon name="arrow" size={16}/></button>}
         {page==='overview'&&<details className="trip-people"><summary><Icon name="users"/>{data.members.length} travelers · Invite friends<Icon name="down"/></summary><p>Share this trip PIN</p><code>{data.trip.joinCode}</code>{data.members.map(member=><div key={member._id}>{member.displayName}<small>{data.trip.groupLeads.includes(member._id)?'Group lead':'Member'}</small></div>)}</details>}
       </>}
+      <Tutorial/>
     </main>
     {session&&tripId&&data&&<>{data.trip.status!=='ended'&&<button className="expense-fab" onClick={()=>setEntryKind('personal')}><Icon name="plus"/>Add expense</button>}<nav className="bottom-nav" aria-label="Trip navigation">{[['overview','Overview','trip'],['feed','Live Feed','expenses'],['balances','Settlement','balances']].map(([id,label,icon])=><button key={id} aria-current={(page===id||(id==='overview'&&page==='purse'))?'page':undefined} onClick={()=>{setPage(id);window.scrollTo({top:0,behavior:'instant'});}}><Icon name={icon}/><span>{label}</span></button>)}</nav></>}
     {notice&&<div className="toast" role="status"><Icon name="check"/>{notice}<button className="icon-button" aria-label="Dismiss notification" onClick={()=>setNotice('')}><Icon name="close"/></button></div>}

@@ -1,5 +1,13 @@
 # Trip Expense Tracker
 
+## First-visit tutorial — September 21, 2026
+
+New browser visitors see a skippable six-step tour with demo screenshots and numbered highlights for trips, expenses, splits, Kitty, and settlement. Completion or dismissal is remembered on that browser; **How to use TripRoam** reopens the tour. The installation step includes an app screenshot and clearly labeled browser-menu illustrations for Android, iPhone/iPad, and desktop. These assets are cached with the offline app shell.
+
+Screenshot fixtures are development-only: run the Vite client and open `/tutorial-capture.html?screen=trips` (also `overview`, `expense`, `kitty`, `settlement`, `install`). They use fictional data and are not part of the production entry. Regenerate the browser-menu illustrations with `node scripts/tutorial-art.mjs`.
+
+Validated: production build, syntax checks, all tour steps/images, device tabs, completion persistence after reload, replay, Escape/focus restoration, and no horizontal overflow at 320px.
+
 ## Current release: mobile redesign, Kitty settlement, and End trip
 
 This section supersedes the historical milestone notes below.

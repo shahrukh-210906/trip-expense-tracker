@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { InstallationGuide } from './Tutorial.jsx';
 
 export default function InstallApp(){
   const [prompt,setPrompt]=useState(null),[installed,setInstalled]=useState(()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true);
@@ -19,5 +20,5 @@ export default function InstallApp(){
     finally{setPrompt(null);setBusy(false);}
   }
   if(installed)return null;
-  return <div className="install-app"><button className="text-button" disabled={busy} onClick={install}>{prompt?'Install Triproam':'How to install Triproam'}</button>{help&&<p>In Chrome or Edge, use the address-bar install icon or browser menu. On iPhone or iPad, open in Safari, tap Share, then Add to Home Screen. If you are using an in-app browser, open this address in your regular browser first.</p>}{message&&<p role="status">{message}</p>}</div>;
+  return <div className="install-app"><button className="text-button" disabled={busy} aria-expanded={help} onClick={install}>{prompt?'Install Triproam':'How to install Triproam'}</button>{help&&<InstallationGuide/>}{message&&<p role="status">{message}</p>}</div>;
 }
